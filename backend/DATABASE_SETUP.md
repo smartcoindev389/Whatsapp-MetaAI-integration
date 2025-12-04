@@ -65,7 +65,17 @@ Copy the example environment file:
 cp env.example .env
 ```
 
-Edit `.env` and update the `DATABASE_URL`:
+Edit `.env` and configure the database connection using individual variables:
+```env
+DB_HOST=localhost
+DB_PORT=3306
+DB_USERNAME=evozap
+DB_PASSWORD=evozappassword
+DB_NAME=evozap
+DB_SCHEMA=public
+```
+
+**Alternative:** You can still use `DATABASE_URL` if you prefer:
 ```env
 DATABASE_URL="mysql://evozap:evozappassword@localhost:3306/evozap?schema=public"
 ```
@@ -155,7 +165,7 @@ This applies pending migrations without prompting (useful for CI/CD).
 
 **Solutions:**
 1. Verify MySQL is running: `mysql -u root -p`
-2. Check the `DATABASE_URL` in `.env` matches your MySQL configuration
+2. Check the database configuration in `.env` (DB_HOST, DB_PORT, DB_USERNAME, DB_PASSWORD, DB_NAME)
 3. Verify MySQL is listening on the correct port (default: 3306)
 4. Check firewall settings
 
@@ -164,9 +174,10 @@ This applies pending migrations without prompting (useful for CI/CD).
 **Error:** `Access denied for user`
 
 **Solutions:**
-1. Verify username and password in `DATABASE_URL`
+1. Verify `DB_USERNAME` and `DB_PASSWORD` in `.env` are correct
 2. Check user exists: `SELECT User FROM mysql.user;`
 3. Verify user has privileges: `SHOW GRANTS FOR 'evozap'@'localhost';`
+4. If using individual variables, ensure all fields (DB_HOST, DB_PORT, etc.) are set correctly
 
 ### Database Doesn't Exist
 
@@ -211,14 +222,52 @@ The database includes the following models:
 
 See `prisma/schema.prisma` for the complete schema definition.
 
+## Database Configuration Methods
+
+The application supports two ways to configure the database connection:
+
+### Method 1: Individual Variables (Recommended)
+
+Use separate environment variables for each database setting:
+
+```env
+DB_HOST=localhost
+DB_PORT=3306
+DB_USERNAME=evozap
+DB_PASSWORD=evozappassword
+DB_NAME=evozap
+DB_SCHEMA=public
+```
+
+**Advantages:**
+- Easier to manage individual settings
+- More secure (can use different sources for credentials)
+- Better for environment-specific configurations
+
+### Method 2: Connection String
+
+Use a single `DATABASE_URL` connection string:
+
+```env
+DATABASE_URL="mysql://evozap:evozappassword@localhost:3306/evozap?schema=public"
+```
+
+**Note:** If both are provided, `DATABASE_URL` takes precedence over individual variables.
+
 ## Production Considerations
 
 1. **Use strong passwords** - Change default credentials
-2. **Enable SSL** - Update `DATABASE_URL` to include SSL parameters
+2. **Enable SSL** - Add SSL parameters to connection:
+   ```env
+   DB_HOST=your-host
+   DB_PORT=3306
+   # Or in DATABASE_URL: ...?ssl=true&sslcert=...
+   ```
 3. **Connection pooling** - Prisma handles this automatically
 4. **Backup strategy** - Set up regular database backups
 5. **Monitor connections** - Use the `/health` endpoint
 6. **Migration strategy** - Use `prisma migrate deploy` in production
+7. **Secure credentials** - Use environment variable management tools (AWS Secrets Manager, HashiCorp Vault, etc.)
 
 ## Additional Resources
 

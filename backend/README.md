@@ -31,7 +31,7 @@ npm install
 ```bash
 # Copy the example environment file
 cp env.example .env
-# Edit .env with your configuration, especially DATABASE_URL
+# Edit .env with your database configuration (DB_HOST, DB_PORT, DB_USERNAME, etc.)
 ```
 
 3. Set up database:

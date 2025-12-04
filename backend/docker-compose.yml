@@ -42,7 +42,15 @@ services:
     environment:
       APP_PORT: 3000
       NODE_ENV: production
-      DATABASE_URL: mysql://evozap:evozappassword@mysql:3306/evozap?schema=public
+      # Database Configuration (Individual Variables)
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USERNAME: ${DB_USERNAME:-evozap}
+      DB_PASSWORD: ${DB_PASSWORD:-evozappassword}
+      DB_NAME: ${DB_NAME:-evozap}
+      DB_SCHEMA: ${DB_SCHEMA:-public}
+      # Alternative: Use DATABASE_URL directly (will be built from above if not provided)
+      DATABASE_URL: ${DATABASE_URL:-mysql://${DB_USERNAME:-evozap}:${DB_PASSWORD:-evozappassword}@mysql:3306/${DB_NAME:-evozap}?schema=${DB_SCHEMA:-public}}
       REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET:-change-this-in-production}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:-change-this-32-char-key-in-production}
