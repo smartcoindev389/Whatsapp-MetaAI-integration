@@ -29,20 +29,60 @@ npm install
 
 2. Set up environment variables:
 ```bash
-cp .env.example .env
-# Edit .env with your configuration
+# Copy the example environment file
+cp env.example .env
+# Edit .env with your configuration, especially DATABASE_URL
 ```
 
 3. Set up database:
+
+**Option A: Using Docker (Recommended for development)**
 ```bash
-npx prisma generate
-npx prisma migrate dev
+# Start MySQL and Redis containers
+docker-compose up -d mysql redis
+
+# Wait a few seconds for MySQL to be ready, then run migrations
+npm run db:setup
 ```
 
-4. Run the application:
+**Option B: Using local MySQL**
+```bash
+# Make sure MySQL is running and create the database
+mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS evozap;"
+
+# Generate Prisma Client and run migrations
+npm run db:setup
+```
+
+**Option C: Using npm scripts**
+```bash
+# Generate Prisma Client
+npm run prisma:generate
+
+# Create and run migrations
+npm run prisma:migrate
+
+# Or use the combined setup command
+npm run db:setup
+```
+
+4. Verify database connection:
+```bash
+# Check health endpoint after starting the app
+curl http://localhost:3000/health
+```
+
+5. Run the application:
 ```bash
 npm run start:dev
 ```
+
+### Database Management
+
+- **View database in Prisma Studio**: `npm run prisma:studio`
+- **Create a new migration**: `npm run prisma:migrate`
+- **Reset database** (⚠️ deletes all data): `npm run prisma:reset`
+- **Deploy migrations** (production): `npm run prisma:migrate:deploy`
 
 ## Docker
 

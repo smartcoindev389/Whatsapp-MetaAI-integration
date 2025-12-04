@@ -14,7 +14,15 @@ export class HealthService {
   async getHealth() {
     try {
       // Check database
-      await this.prisma.$queryRaw`SELECT 1`;
+      const dbHealthy = await this.prisma.isHealthy();
+
+      if (!dbHealthy) {
+        return {
+          status: 'error',
+          database: 'disconnected',
+          error: 'Database connection failed',
+        };
+      }
 
       // Check queues
       const webhookWaiting = await this.webhookQueue.getWaitingCount();
@@ -39,6 +47,7 @@ export class HealthService {
     } catch (error) {
       return {
         status: 'error',
+        database: 'error',
         error: error.message,
       };
     }
