@@ -11,7 +11,7 @@ import type {
   DashboardStats,
 } from './types';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 class ApiClient {
   private baseURL: string;
@@ -108,6 +108,24 @@ class ApiClient {
 
   async getShop(id: string): Promise<Shop> {
     return this.request<Shop>(`/shops/${id}`);
+  }
+
+  async updateShop(id: string, name: string): Promise<Shop> {
+    return this.request<Shop>(`/shops/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ name }),
+    });
+  }
+
+  async getUserProfile(): Promise<User> {
+    return this.request<User>('/auth/me');
+  }
+
+  async updateUserEmail(email: string): Promise<User> {
+    return this.request<User>('/auth/email', {
+      method: 'PUT',
+      body: JSON.stringify({ email }),
+    });
   }
 
   // WABA
@@ -222,33 +240,7 @@ class ApiClient {
 
   // Dashboard
   async getDashboardStats(wabaAccountId: string): Promise<DashboardStats> {
-    // TODO: Implement proper stats endpoint in backend
-    // For now, calculate from conversations
-    try {
-      const conversations = await this.getConversations(wabaAccountId, 1, 1000);
-      return {
-        messages_sent_24h: 0,
-        messages_delivered_24h: 0,
-        messages_read_24h: 0,
-        messages_failed_24h: 0,
-        active_conversations: conversations.data?.length || 0,
-        queue_size: 0,
-        delivery_rate: 0,
-        read_rate: 0,
-      };
-    } catch (error) {
-      // Return defaults on error
-      return {
-        messages_sent_24h: 0,
-        messages_delivered_24h: 0,
-        messages_read_24h: 0,
-        messages_failed_24h: 0,
-        active_conversations: 0,
-        queue_size: 0,
-        delivery_rate: 0,
-        read_rate: 0,
-      };
-    }
+    return this.request<DashboardStats>(`/dashboard/stats?wabaAccountId=${wabaAccountId}`);
   }
 }
 

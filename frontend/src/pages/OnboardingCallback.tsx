@@ -34,7 +34,7 @@ const OnboardingCallback = () => {
     // Call backend to handle the callback
     // Note: Backend callback endpoint is at /auth/embedded/callback
     // We need to call it from the backend since it needs to exchange the code
-    fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/auth/embedded/callback?code=${code}&state=${state || ''}`, {
+    fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/auth/embedded/callback?code=${code}&state=${state || ''}`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,

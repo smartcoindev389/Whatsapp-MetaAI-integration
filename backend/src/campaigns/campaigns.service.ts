@@ -129,12 +129,39 @@ export class CampaignsService {
     const sentCount = campaign.jobs.filter((j) => j.status === 'sent').length;
     const failedCount = campaign.jobs.filter((j) => j.status === 'failed').length;
 
+    // Get sent job phone numbers
+    const sentJobNumbers = campaign.jobs
+      .filter((j) => j.status === 'sent')
+      .map((j) => j.toNumber);
+
+    // Count messages by status for campaign phone numbers
+    let deliveredCount = 0;
+    let readCount = 0;
+
+    if (sentJobNumbers.length > 0) {
+      const messages = await this.prisma.message.findMany({
+        where: {
+          wabaAccountId: campaign.wabaAccountId,
+          to: {
+            in: sentJobNumbers,
+          },
+          direction: 'outbound',
+          createdAt: {
+            gte: campaign.createdAt, // Messages created after campaign start
+          },
+        },
+      });
+
+      deliveredCount = messages.filter((m) => m.status === 'delivered').length;
+      readCount = messages.filter((m) => m.status === 'read').length;
+    }
+
     return {
       ...campaign,
       sentCount,
       failedCount,
-      deliveredCount: 0, // TODO: Calculate from message statuses
-      readCount: 0, // TODO: Calculate from message statuses
+      deliveredCount,
+      readCount,
     };
   }
 
@@ -147,15 +174,59 @@ export class CampaignsService {
       orderBy: { createdAt: 'desc' },
     });
 
+    if (campaigns.length === 0) {
+      return [];
+    }
+
+    // Get earliest campaign date for optimization
+    const earliestCampaignDate = campaigns.reduce((earliest, campaign) => {
+      return campaign.createdAt < earliest ? campaign.createdAt : earliest;
+    }, campaigns[0].createdAt);
+
+    // Get all messages for this WABA after earliest campaign date
+    // Then filter by campaign in memory for better performance
+    const allMessages = await this.prisma.message.findMany({
+      where: {
+        wabaAccountId,
+        direction: 'outbound',
+        createdAt: {
+          gte: earliestCampaignDate,
+        },
+      },
+      select: {
+        to: true,
+        status: true,
+        createdAt: true,
+      },
+    });
+
+    // Group messages by campaign based on phone number and creation time
+    const messagesByCampaign = new Map<string, any[]>();
+
     return campaigns.map((campaign) => {
       const sentCount = campaign.jobs.filter((j) => j.status === 'sent').length;
       const failedCount = campaign.jobs.filter((j) => j.status === 'failed').length;
+
+      const sentJobNumbers = campaign.jobs
+        .filter((j) => j.status === 'sent')
+        .map((j) => j.toNumber);
+
+      // Filter messages for this campaign (matching phone numbers and after campaign creation)
+      const campaignMessages = allMessages.filter(
+        (m) =>
+          sentJobNumbers.includes(m.to) &&
+          m.createdAt >= campaign.createdAt,
+      );
+
+      const deliveredCount = campaignMessages.filter((m) => m.status === 'delivered').length;
+      const readCount = campaignMessages.filter((m) => m.status === 'read').length;
+
       return {
         ...campaign,
         sentCount,
         failedCount,
-        deliveredCount: 0,
-        readCount: 0,
+        deliveredCount,
+        readCount,
       };
     });
   }

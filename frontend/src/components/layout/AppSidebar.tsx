@@ -9,6 +9,8 @@ import {
   BarChart3,
   Link as LinkIcon,
 } from "lucide-react";
+import headerLogo from "@/assets/header-logo.png";
+import markWhite from "@/assets/mark-white.png";
 import {
   Sidebar,
   SidebarContent,
@@ -49,14 +51,18 @@ export function AppSidebar() {
         {/* Logo */}
         <div className="px-6 mb-6">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-primary flex items-center justify-center">
-              <MessageSquare className="h-6 w-6 text-white" />
-            </div>
-            {open && (
-              <div>
-                <h1 className="text-lg font-bold">WhatsApp</h1>
-                <p className="text-xs text-muted-foreground">Platform</p>
-              </div>
+            {open ? (
+              <img 
+                src={headerLogo} 
+                alt="Salva Zap" 
+                className="h-10 w-auto object-contain"
+              />
+            ) : (
+              <img 
+                src={markWhite} 
+                alt="Salva Zap" 
+                className="h-10 w-10 object-contain"
+              />
             )}
           </div>
         </div>

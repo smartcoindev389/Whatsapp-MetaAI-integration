@@ -11,6 +11,7 @@ import { InboxModule } from './inbox/inbox.module';
 import { TemplatesModule } from './templates/templates.module';
 import { CampaignsModule } from './campaigns/campaigns.module';
 import { HealthModule } from './health/health.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 import { BullModule } from '@nestjs/bullmq';
 import Redis from 'ioredis';
 
@@ -45,6 +46,7 @@ import Redis from 'ioredis';
     TemplatesModule,
     CampaignsModule,
     HealthModule,
+    DashboardModule,
   ],
 })
 export class AppModule {}

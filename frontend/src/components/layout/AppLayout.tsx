@@ -3,6 +3,7 @@ import { AppSidebar } from "./AppSidebar";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Bell, User, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import headerLogo from "@/assets/header-logo.png";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,10 +36,11 @@ export const AppLayout = () => {
             <div className="h-full px-6 flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <SidebarTrigger />
-                <div>
-                  <h2 className="text-lg font-semibold">WhatsApp Platform</h2>
-                  <p className="text-xs text-muted-foreground">Multi-tenant Messaging</p>
-                </div>
+                <img 
+                  src={headerLogo} 
+                  alt="Salva Zap" 
+                  className="h-8 w-auto object-contain"
+                />
               </div>
               
               <div className="flex items-center gap-3">

@@ -62,21 +62,35 @@ export class CampaignCostService {
       const brlCost = usdCost * exchangeRate.BRL;
 
       return {
-        usdCost: Math.round(usdCost * 10000) / 10000, // Round to 4 decimals
-        brlCost: Math.round(brlCost * 100) / 100, // Round to 2 decimals
+        totalCost: Math.round(usdCost * 10000) / 10000, // Round to 4 decimals
+        costPerMessage: conversationPrice,
         currency: pricing.currency || 'USD',
+        breakdown: {
+          messageCount: contactCount,
+          costPerUnit: conversationPrice,
+        },
+        // Additional fields for backwards compatibility
+        usdCost: Math.round(usdCost * 10000) / 10000,
+        brlCost: Math.round(brlCost * 100) / 100,
         pricingModel: pricing.pricing_model || 'conversation',
-        contactCount,
       };
     } catch (error) {
       this.logger.error('Error calculating campaign cost:', error);
       // Return default pricing if cache/API fails
+      const defaultPricePerMessage = 0.005;
+      const defaultUsdCost = contactCount * defaultPricePerMessage;
       return {
-        usdCost: contactCount * 0.005, // Default $0.005 per message
-        brlCost: contactCount * 0.025, // Default ~R$0.025 per message (assuming ~5 BRL/USD)
+        totalCost: defaultUsdCost,
+        costPerMessage: defaultPricePerMessage,
         currency: 'USD',
+        breakdown: {
+          messageCount: contactCount,
+          costPerUnit: defaultPricePerMessage,
+        },
+        // Additional fields for backwards compatibility
+        usdCost: defaultUsdCost,
+        brlCost: contactCount * 0.025, // Default ~R$0.025 per message (assuming ~5 BRL/USD)
         pricingModel: 'conversation',
-        contactCount,
       };
     }
   }

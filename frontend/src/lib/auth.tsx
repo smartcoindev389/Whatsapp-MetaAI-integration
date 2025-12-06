@@ -21,12 +21,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Check if user is logged in by verifying token
     const token = localStorage.getItem('auth_token');
     if (token) {
-      // Try to get user info - if token is invalid, API will redirect to login
-      // For now, we'll just set a placeholder and let the API handle auth
-      // TODO: Add a /auth/me endpoint to verify token and get user
-      setUser({ id: '', email: '' }); // Placeholder
+      // Fetch user profile from backend
+      api.getUserProfile()
+        .then((userProfile) => {
+          setUser(userProfile);
+        })
+        .catch(() => {
+          // Token invalid or expired, clear it
+          api.setToken(null);
+          setUser(null);
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+    } else {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   const login = async (email: string, password: string) => {

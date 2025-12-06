@@ -1,10 +1,16 @@
-import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Put, UseGuards } from '@nestjs/common';
 import { ShopsService } from './shops.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { IsString, MinLength } from 'class-validator';
+import { IsString, MinLength, IsEmail, IsOptional } from 'class-validator';
 
 class CreateShopDto {
+  @IsString()
+  @MinLength(1)
+  name: string;
+}
+
+class UpdateShopDto {
   @IsString()
   @MinLength(1)
   name: string;
@@ -28,6 +34,15 @@ export class ShopsController {
   @Get(':id')
   async findOne(@Param('id') id: string) {
     return this.shopsService.findOne(id);
+  }
+
+  @Put(':id')
+  async update(
+    @Param('id') id: string,
+    @CurrentUser() user: any,
+    @Body() updateShopDto: UpdateShopDto,
+  ) {
+    return this.shopsService.update(id, user.id, updateShopDto);
   }
 }
 

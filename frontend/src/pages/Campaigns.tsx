@@ -66,6 +66,14 @@ const Campaigns = () => {
     refetchInterval: 30000,
   });
 
+  // Calculate summary stats from real campaign data
+  const campaignStats = {
+    active: campaigns.filter((c: any) => c.status === 'sending' || c.status === 'running').length,
+    scheduled: campaigns.filter((c: any) => c.status === 'created' || c.status === 'scheduled').length,
+    completed: campaigns.filter((c: any) => c.status === 'completed').length,
+    totalReach: campaigns.reduce((sum: number, c: any) => sum + (c.contactCount || 0), 0),
+  };
+
   const { data: templates = [] } = useQuery({
     queryKey: ['templates', wabaAccountId],
     queryFn: () => wabaAccountId ? api.getTemplates(wabaAccountId) : Promise.resolve([]),
@@ -249,7 +257,7 @@ const Campaigns = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Active</p>
-                <h3 className="text-2xl font-bold mt-1">1</h3>
+                <h3 className="text-2xl font-bold mt-1">{campaignStats.active}</h3>
               </div>
               <Play className="h-8 w-8 text-primary" />
             </div>
@@ -261,7 +269,7 @@ const Campaigns = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Scheduled</p>
-                <h3 className="text-2xl font-bold mt-1">1</h3>
+                <h3 className="text-2xl font-bold mt-1">{campaignStats.scheduled}</h3>
               </div>
               <Calendar className="h-8 w-8 text-info" />
             </div>
@@ -273,7 +281,7 @@ const Campaigns = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Completed</p>
-                <h3 className="text-2xl font-bold mt-1">1</h3>
+                <h3 className="text-2xl font-bold mt-1">{campaignStats.completed}</h3>
               </div>
               <BarChart3 className="h-8 w-8 text-success" />
             </div>
@@ -285,7 +293,11 @@ const Campaigns = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Total Reach</p>
-                <h3 className="text-2xl font-bold mt-1">43.4K</h3>
+                <h3 className="text-2xl font-bold mt-1">
+                  {campaignStats.totalReach >= 1000
+                    ? `${(campaignStats.totalReach / 1000).toFixed(1)}K`
+                    : campaignStats.totalReach.toLocaleString()}
+                </h3>
               </div>
               <Users className="h-8 w-8 text-primary" />
             </div>

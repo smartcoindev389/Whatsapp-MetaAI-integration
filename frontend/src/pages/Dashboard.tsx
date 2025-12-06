@@ -97,29 +97,29 @@ const Dashboard = () => {
         <StatsCard
           title="Messages Sent (24h)"
           value={stats.messages_sent_24h.toLocaleString()}
-          change="+12.5% from yesterday"
-          changeType="positive"
+          change={`${stats.messages_sent_24h} messages sent`}
+          changeType="neutral"
           icon={Send}
         />
         <StatsCard
           title="Delivered (24h)"
           value={stats.messages_delivered_24h.toLocaleString()}
-          change={`${stats.delivery_rate}% delivery rate`}
-          changeType="positive"
+          change={`${stats.delivery_rate.toFixed(1)}% delivery rate`}
+          changeType={stats.delivery_rate >= 95 ? "positive" : stats.delivery_rate >= 80 ? "neutral" : "negative"}
           icon={CheckCheck}
         />
         <StatsCard
           title="Read (24h)"
           value={stats.messages_read_24h.toLocaleString()}
-          change={`${stats.read_rate}% read rate`}
+          change={`${stats.read_rate.toFixed(1)}% read rate`}
           changeType="neutral"
           icon={Eye}
         />
         <StatsCard
           title="Failed (24h)"
           value={stats.messages_failed_24h.toLocaleString()}
-          change="-2.3% from yesterday"
-          changeType="positive"
+          change={`${stats.messages_sent_24h > 0 ? ((stats.messages_failed_24h / stats.messages_sent_24h) * 100).toFixed(1) : 0}% failure rate`}
+          changeType={stats.messages_failed_24h === 0 ? "positive" : stats.messages_failed_24h < 5 ? "neutral" : "negative"}
           icon={AlertCircle}
         />
       </div>
@@ -155,7 +155,8 @@ const Dashboard = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground font-medium">Avg Response Time</p>
-                <h3 className="text-2xl font-bold mt-2">2.3m</h3>
+                <h3 className="text-2xl font-bold mt-2">-</h3>
+                <p className="text-xs text-muted-foreground mt-1">Coming soon</p>
               </div>
               <Activity className="h-8 w-8 text-info" />
             </div>

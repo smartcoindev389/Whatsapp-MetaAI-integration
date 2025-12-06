@@ -1,8 +1,10 @@
-import { Controller, Post, Body, Get, Query, UseGuards, Request, Res, HttpException } from '@nestjs/common';
+import { Controller, Post, Body, Get, Query, UseGuards, Request, Res, HttpException, Put } from '@nestjs/common';
 import { Response } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { LocalAuthGuard } from './guards/local-auth.guard';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { IsEmail, IsString, MinLength } from 'class-validator';
 import { WabaService } from '../waba/waba.service';
 
@@ -24,6 +26,11 @@ class RegisterDto {
   password: string;
 }
 
+class UpdateEmailDto {
+  @IsEmail()
+  email: string;
+}
+
 @Controller('auth')
 export class AuthController {
   constructor(
@@ -42,6 +49,21 @@ export class AuthController {
   @Post('login')
   async login(@Request() req) {
     return this.authService.login(req.user);
+  }
+
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  async getProfile(@CurrentUser() user: any) {
+    return {
+      id: user.id,
+      email: user.email,
+    };
+  }
+
+  @Put('email')
+  @UseGuards(JwtAuthGuard)
+  async updateEmail(@CurrentUser() user: any, @Body() updateEmailDto: UpdateEmailDto) {
+    return this.authService.updateEmail(user.id, updateEmailDto.email);
   }
 
   @Get('embedded/callback')

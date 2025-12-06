@@ -56,5 +56,24 @@ export class AuthService {
     const { password: _, ...result } = user;
     return result;
   }
+
+  async updateEmail(userId: string, newEmail: string) {
+    // Check if email is already taken
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email: newEmail },
+    });
+
+    if (existingUser && existingUser.id !== userId) {
+      throw new UnauthorizedException('Email is already in use');
+    }
+
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: { email: newEmail },
+    });
+
+    const { password: _, ...result } = user;
+    return result;
+  }
 }
 
