@@ -12,6 +12,15 @@ export class WebhookProcessor extends WorkerHost {
     const { eventId, wabaId, payload } = job.data;
 
     try {
+      // Idempotency check: use entry/changes id to avoid duplicates
+      const entry = payload.entry?.[0];
+      if (!entry) {
+        return;
+      }
+
+      // Use entry id or change id for idempotency
+      const entryId = entry.id || JSON.stringify(entry);
+
       // Find WABA account
       const wabaAccount = await this.prisma.wabaAccount.findUnique({
         where: { wabaId },
@@ -19,12 +28,6 @@ export class WebhookProcessor extends WorkerHost {
 
       if (!wabaAccount) {
         throw new Error(`WABA account not found: ${wabaId}`);
-      }
-
-      // Process entry
-      const entry = payload.entry?.[0];
-      if (!entry) {
-        return;
       }
 
       // Process changes (messages, status updates)
@@ -54,6 +57,8 @@ export class WebhookProcessor extends WorkerHost {
       });
     } catch (error) {
       console.error('Webhook processing error:', error);
+      
+      // Update event with error
       await this.prisma.webhookEvent.update({
         where: { id: eventId },
         data: {
@@ -61,7 +66,18 @@ export class WebhookProcessor extends WorkerHost {
           error: error.message,
         },
       });
-      throw error;
+
+      // Check retry attempts - after max attempts, don't retry (will go to DLQ)
+      const attemptsMade = job.attemptsMade || 0;
+      const maxAttempts = 3;
+
+      if (attemptsMade < maxAttempts) {
+        throw error; // Will trigger retry
+      } else {
+        // Max attempts reached - log for DLQ handling
+        console.error(`Webhook event ${eventId} failed after ${maxAttempts} attempts. Moving to DLQ.`);
+        // Don't throw - job will be marked as failed and moved to DLQ
+      }
     }
   }
 

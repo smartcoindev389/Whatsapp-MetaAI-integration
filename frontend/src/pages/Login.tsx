@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
+import logo from "@/assets/logo.png";
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -31,7 +32,18 @@ const Login = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted p-4">
-      <Card className="w-full max-w-md">
+      <div className="w-full max-w-5xl flex flex-col md:flex-row items-center gap-8">
+        {/* Logo Section */}
+        <div className="w-full md:w-1/2 flex items-center justify-center">
+          <img 
+            src={logo} 
+            alt="Logo" 
+            className="w-full max-w-md h-auto object-contain"
+          />
+        </div>
+        
+        {/* Form Section */}
+        <Card className="w-full md:w-1/2 max-w-md">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold text-center">Welcome back</CardTitle>
           <CardDescription className="text-center">
@@ -80,6 +92,7 @@ const Login = () => {
           </form>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 };

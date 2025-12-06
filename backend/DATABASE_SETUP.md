@@ -1,7 +1,3 @@
-# Database Setup Guide
-
-This guide will help you set up the database connection for the EvoZap API.
-
 ## Prerequisites
 
 - Node.js 18+ installed

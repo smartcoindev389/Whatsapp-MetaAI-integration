@@ -10,6 +10,7 @@ import Inbox from "./pages/Inbox";
 import Templates from "./pages/Templates";
 import Campaigns from "./pages/Campaigns";
 import Onboarding from "./pages/Onboarding";
+import OnboardingCallback from "./pages/OnboardingCallback";
 import Analytics from "./pages/Analytics";
 import Settings from "./pages/Settings";
 import Login from "./pages/Login";
@@ -37,6 +38,14 @@ const App = () => (
           <Route path="/register" element={<Register />} />
           
           {/* Protected routes */}
+          <Route
+            path="/onboarding/callback"
+            element={
+              <ProtectedRoute>
+                <OnboardingCallback />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/"
             element={

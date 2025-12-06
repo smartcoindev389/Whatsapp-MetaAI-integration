@@ -3,6 +3,7 @@ import { Job } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
 import { MessagesService } from '../messages/messages.service';
 import { ConfigService } from '@nestjs/config';
+import { RateLimiterUtil } from '../common/utils/rate-limiter.util';
 
 @Processor('campaign-sender')
 export class CampaignProcessor extends WorkerHost {
@@ -12,6 +13,7 @@ export class CampaignProcessor extends WorkerHost {
     private prisma: PrismaService,
     private messagesService: MessagesService,
     private configService: ConfigService,
+    private rateLimiter: RateLimiterUtil,
   ) {
     super();
     this.rateLimit = parseInt(configService.get<string>('RATE_LIMIT_DEFAULT') || '10');
@@ -21,8 +23,17 @@ export class CampaignProcessor extends WorkerHost {
     const { campaignId, jobId, wabaAccountId, templateId, toNumber } = job.data;
 
     try {
-      // Rate limiting: simple delay based on rate limit
-      await new Promise((resolve) => setTimeout(resolve, 1000 / this.rateLimit));
+      // Get WABA account to get phoneId for rate limiting
+      const wabaAccount = await this.prisma.wabaAccount.findUnique({
+        where: { id: wabaAccountId },
+      });
+
+      if (!wabaAccount) {
+        throw new Error('WABA account not found');
+      }
+
+      // Rate limiting: Use Redis token bucket per phoneId
+      await this.rateLimiter.waitForRateLimit(wabaAccount.phoneId, this.rateLimit, this.rateLimit);
 
       if (templateId) {
         // Send template message

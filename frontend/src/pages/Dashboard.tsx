@@ -20,18 +20,19 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const [wabaAccountId, setWabaAccountId] = useState<string | null>(null);
 
+  // Use React Query for shops to enable automatic refresh
+  const { data: shops = [] } = useQuery({
+    queryKey: ['shops'],
+    queryFn: () => api.getShops(),
+    refetchOnWindowFocus: true,
+  });
+
   useEffect(() => {
     // Get first shop's WABA account
-    api.getShops()
-      .then((shops) => {
-        if (shops.length > 0 && shops[0].waba && shops[0].waba.length > 0) {
-          setWabaAccountId(shops[0].waba[0].id);
-        }
-      })
-      .catch(() => {
-        // Handle error silently
-      });
-  }, []);
+    if (shops.length > 0 && shops[0].waba && shops[0].waba.length > 0) {
+      setWabaAccountId(shops[0].waba[0].id);
+    }
+  }, [shops]);
 
   const { data: stats = {
     messages_sent_24h: 0,
@@ -66,7 +67,7 @@ const Dashboard = () => {
 
   const recentCampaigns = campaigns.slice(0, 3).map((campaign: any) => ({
     id: campaign.id,
-    name: campaign.name || 'Unnamed Campaign',
+    name: `Campaign #${campaign.id.slice(0, 8)}${campaign.templateId ? ' (Template)' : ' (Plain Text)'}`,
     status: campaign.status,
     sent: campaign.sentCount || 0,
     delivered: campaign.deliveredCount || 0,

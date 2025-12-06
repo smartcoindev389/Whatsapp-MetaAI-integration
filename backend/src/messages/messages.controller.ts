@@ -15,6 +15,10 @@ class SendMessageDto {
   @IsString()
   @IsNotEmpty()
   body: string;
+
+  @IsString()
+  @IsOptional()
+  clientMessageId?: string;
 }
 
 class SendTemplateDto {
@@ -37,6 +41,10 @@ class SendTemplateDto {
   @IsArray()
   @IsOptional()
   parameters?: string[];
+
+  @IsString()
+  @IsOptional()
+  clientMessageId?: string;
 }
 
 @Controller('messages')
@@ -50,6 +58,7 @@ export class MessagesController {
       sendMessageDto.wabaAccountId,
       sendMessageDto.to,
       sendMessageDto.body,
+      sendMessageDto.clientMessageId,
     );
   }
 
@@ -61,6 +70,7 @@ export class MessagesController {
       sendTemplateDto.templateName,
       sendTemplateDto.language,
       sendTemplateDto.parameters,
+      sendTemplateDto.clientMessageId,
     );
   }
 }

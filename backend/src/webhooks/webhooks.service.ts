@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
@@ -9,6 +9,8 @@ import { Queue } from 'bullmq';
 export class WebhooksService {
   private readonly verifyToken: string;
   private readonly appSecret: string;
+  private readonly logger = new Logger(WebhooksService.name);
+  private signatureFailCount = 0;
 
   constructor(
     private prisma: PrismaService,
@@ -28,6 +30,9 @@ export class WebhooksService {
 
   verifySignature(signature: string, payload: string): boolean {
     if (!signature || !this.appSecret) {
+      this.logger.warn('Missing signature or app secret');
+      this.signatureFailCount++;
+      this.checkSignatureFailRate();
       return false;
     }
 
@@ -38,10 +43,31 @@ export class WebhooksService {
 
     const providedSignature = signature.replace('sha256=', '');
 
-    return crypto.timingSafeEqual(
+    const isValid = crypto.timingSafeEqual(
       Buffer.from(expectedSignature),
       Buffer.from(providedSignature),
     );
+
+    if (!isValid) {
+      this.logger.warn('Invalid webhook signature detected');
+      this.signatureFailCount++;
+      this.checkSignatureFailRate();
+    } else {
+      // Reset counter on success
+      this.signatureFailCount = Math.max(0, this.signatureFailCount - 1);
+    }
+
+    return isValid;
+  }
+
+  private checkSignatureFailRate() {
+    // Alert if signature fail rate is high (example: > 10 failures in short time)
+    if (this.signatureFailCount > 10) {
+      this.logger.error(
+        `HIGH SIGNATURE FAILURE RATE: ${this.signatureFailCount} failures detected. ` +
+        'Please verify META_APP_SECRET configuration.',
+      );
+    }
   }
 
   async processWebhookEvent(wabaId: string, rawBody: any, headers: any) {

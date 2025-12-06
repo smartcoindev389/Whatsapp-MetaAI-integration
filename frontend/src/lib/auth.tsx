@@ -1,8 +1,9 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { api } from './api';
+import type { User } from './types';
 
 interface AuthContextType {
-  user: any | null;
+  user: User | null;
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string) => Promise<void>;
@@ -13,15 +14,17 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<any | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check if user is logged in
+    // Check if user is logged in by verifying token
     const token = localStorage.getItem('auth_token');
     if (token) {
-      // TODO: Verify token with backend
-      setUser({ id: '1', email: 'user@example.com' }); // Placeholder
+      // Try to get user info - if token is invalid, API will redirect to login
+      // For now, we'll just set a placeholder and let the API handle auth
+      // TODO: Add a /auth/me endpoint to verify token and get user
+      setUser({ id: '', email: '' }); // Placeholder
     }
     setLoading(false);
   }, []);
@@ -45,7 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider
       value={{
         user,
-        isAuthenticated: !!user,
+        isAuthenticated: !!user && !!localStorage.getItem('auth_token'),
         login,
         register,
         logout,
@@ -64,4 +67,3 @@ export function useAuth() {
   }
   return context;
 }
-

@@ -1,0 +1,329 @@
+# Stage 1 — Merchant Module: detailed, step-by-step requirements (final & actionable)
+
+
+---
+
+## 0) Preliminaries — environment & secrets (what you prepare now)
+
+* Create a repo and branch structure (e.g. `main`, `dev`, `feature/waba-embedded`).
+* Local dev stack (docker-compose):
+
+  * nestjs app, mysql, redis, bull-board (optional), admin worker container
+* Required env variables (example names):
+
+  ```
+  APP_PORT
+  NODE_ENV
+  DATABASE_URL
+  REDIS_URL
+  JWT_SECRET
+  ENCRYPTION_KEY
+  META_APP_ID                # from client
+  META_APP_SECRET            # from client
+  META_VERIFY_TOKEN          # provided by client
+  REDIRECT_URI               # final value when deployed
+  WEBHOOK_PUBLIC_URL         # final value when deployed
+  RATE_LIMIT_DEFAULT         # e.g. 10 (msgs/sec per phone)
+  ```
+* Acceptance: repo + local docker compose up → app, mysql, redis, workers start.
+
+---
+
+## 1) Authentication & tenant onboarding API (basic scaffold)
+
+### Build:
+
+* JWT-based auth (simple merchant user model) or integrate existing auth if frontend already has it.
+* Endpoints:
+
+  * `POST /auth/login` → returns JWT (or skip if frontend handles auth).
+  * `POST /shops` → create shop/tenant (if needed).
+  * `GET /shops/:id`
+
+### Input/Output:
+
+* Input: shop name, owner email. Output: shop id, createdAt.
+
+### Acceptance:
+
+* Can create a shop and return JWT-protected responses.
+
+---
+
+## 2) Embedded Signup start (frontend + backend handshake)
+
+### Build:
+
+* Endpoint: `GET /waba/embedded/start?shopId={id}`
+
+  * Server builds the Embedded Signup URL with `client_id=APP_ID`, `redirect_uri=REDIRECT_URI`, required scopes, `state={shopId|nonce}`.
+  * Return the redirect URL to frontend.
+
+### Input/Output:
+
+* Input: shopId, optional redirect param. Output: full URL for frontend to redirect merchant to Meta.
+
+### Acceptance:
+
+* Frontend can call this endpoint and receive a valid URL. (Unit test: URL contains app_id, redirect_uri, state.)
+
+---
+
+## 3) OAuth callback / code exchange (core onboarding)
+
+### Build:
+
+* Endpoint: `GET /auth/embedded/callback?code={code}&state={state}` — receives OAuth `code`.
+* Steps inside handler:
+
+  1. Exchange code for access token: `GET https://graph.facebook.com/v{ver}/oauth/access_token?client_id=APP_ID&client_secret=APP_SECRET&redirect_uri=REDIRECT_URI&code={code}`
+  2. Use returned token to call Graph API to fetch Business ID and WABA resources:
+
+     * `/me?fields=businesses{owned_whatsapp_business_accounts}` OR use business endpoint per docs.
+     * Get: `business_id`, `waba_id`, `phone_number_id(s)`, `display_name`.
+  3. Optionally exchange for long-lived token per Meta flow if applicable by the flow (but client said tokens are obtained via Embedded Signup — store whatever token is returned).
+  4. Store tenant record and WABA account in DB (encrypted token).
+  5. Programmatically register webhook for this app and subscribe to WhatsApp events (see step 4).
+* Response back to frontend: success + tenant connection summary (wabaId, phoneId, displayName, webhookRegistered boolean).
+
+### Input/Output:
+
+* Input: code, state. Output: saved tenant, JSON summary.
+
+### Acceptance:
+
+* After callback, DB has a `WabaAccount` row with `wabaId`, `phoneId`, encrypted token and `webhook_registered=false` (until webhook validated).
+* Endpoint returns connection summary to frontend.
+
+---
+
+## 4) Webhook registration & validation
+
+### Build:
+
+* Programmatically register app subscriptions:
+
+  * `POST /{app-id}/subscriptions` to subscribe webhook for `whatsapp_business_account` events (use App Access or token as required by Meta).
+* Webhook endpoints:
+
+  * `GET /webhooks/meta` → returns `hub.challenge` when `hub.verify_token` matches `META_VERIFY_TOKEN`.
+  * `POST /webhooks/meta` → main webhook ingestion.
+* Validate and persist:
+
+  * For `POST`, capture **raw body** (express body-parser `verify` hook), validate `x-hub-signature-256` (HMAC-SHA256 with `META_APP_SECRET`).
+  * If signature invalid → return 401. If valid → persist `WebhookEvent` record and push `webhook-processing` job to BullMQ, then return 200 immediately.
+
+### Input/Output:
+
+* Input: Graph API register call uses app credentials, client provides `META_VERIFY_TOKEN` and will add final redirect/webhook URLs as needed.
+* Output: DB `WebhookEvent` rows, queue jobs.
+
+### Acceptance:
+
+* Webhook GET challenge returns `hub.challenge` when verify_token matches.
+* POST: valid signature → HTTP 200, DB row created, job enqueued; invalid signature → 401.
+
+---
+
+## 5) Webhook processing (BullMQ worker)
+
+### Build:
+
+* Queue: `webhook-processing` (high priority) with concurrency tuned.
+* Worker responsibilities:
+
+  * Parse raw event JSON.
+  * Idempotency check: use Meta `message_id` or `entry/changes` id to avoid duplicates.
+  * Create/Update `Conversation` and `Message` records:
+
+    * If inbound message from a contact for a WABA → upsert Conversation (wabaAccountId + contactNumber).
+    * Insert Message with `direction=inbound`, `rawPayload`, `messageId` if present.
+    * For status change entries, update `Message.status`.
+  * On failures: use retry/backoff config; move to DLQ after N attempts and create an alert record.
+* Replay tool:
+
+  * Admin endpoint `POST /webhooks/replay/:eventId` to reenqueue event for processing.
+
+### Acceptance:
+
+* Queue worker processes an example webhook event fixture and creates conversation & messages. Retries on transient failures and moves broken events to DLQ.
+
+---
+
+## 6) Messaging endpoints (send text + templates)
+
+### Build:
+
+* `POST /messages/send`
+
+  * Body: `{shopId, to, text, clientMessageId?}`
+  * Server looks up `WabaAccount` for shop, decrypts token, calls `POST /{phoneId}/messages` with proper body. Save outbound Message record (`status = pending`), update with `messageId` from Meta once returned.
+* `POST /messages/template`
+
+  * Body: `{shopId, to, templateName, language, components}`
+  * Validate template parameters then call Cloud API, persist event similarly.
+* Ensure idempotency (accept `clientMessageId` and dedupe).
+
+### Acceptance:
+
+* Sending a text message returns success and DB has outbound message with Meta `messageId`. Subsequent webhook status updates update `status` to `sent/delivered/read`.
+
+---
+
+## 7) Inbox API
+
+### Build:
+
+* `GET /inbox/conversations?shopId={id}&limit=&page=`
+
+  * Return conversation list ordered by `lastAt`, with `contactNumber`, `lastMessageSnippet`, `lastAt`, `unreadCount`.
+* `GET /inbox/conversations/{conversationId}?limit=&page=`
+
+  * Return full thread (paginated) with message metadata and direction/status.
+
+### Acceptance:
+
+* Frontend can load conversation list and open full thread. Conversations reflect messages processed via webhook and sent by API.
+
+---
+
+## 8) Templates management
+
+### Build:
+
+* `GET /templates?shopId={id}`
+* `POST /templates/submit` (submit to Meta for approval)
+
+  * Store template submission history, map Meta responses to `status`.
+* Update template status upon webhook events if Meta pushes status changes.
+
+### Acceptance:
+
+* Template submission stores history row and returns Meta submission result. Template statuses update via webhook events.
+
+---
+
+## 9) Campaigns (MVP)
+
+### Build:
+
+* `POST /campaigns` → create campaign with `templateId`, `contacts[]`.
+
+  * Create `CampaignJob` rows (`campaignId`, `toNumber`, `status=pending`).
+* Worker: `campaign-sender` queue consumes jobs:
+
+  * Enforce rate limit per phoneId using Redis token bucket (default 10 msg/s).
+  * Send messages using outbound API call; update job status.
+  * Update `Campaign` progress summary.
+* Endpoints:
+
+  * `GET /campaigns/:id` → status/progress
+  * `GET /campaigns/cost?templateId=X&contactCount=Y` → query cached Meta pricelist and convert USD→BRL (cache TTLs: Meta price 24h; FX 6h).
+
+### Acceptance:
+
+* Create a campaign with 50 jobs, run worker; ensure rate does not exceed configured per-phone limit and campaign progresses with logs.
+
+---
+
+## 10) DB schema (core tables — implement via Prisma or TypeORM)
+
+Minimum entities (fields summarized earlier):
+
+* `User`, `Shop`
+* `WabaAccount` (shopId, wabaId, phoneId, displayNumber, encryptedToken, tokenExpiresAt, webhookVerified)
+* `WebhookEvent` (rawBody, headers, processed, error)
+* `Conversation` (wabaAccountId, contactNumber, lastAt, unreadCount)
+* `Message` (conversationId, wabaAccountId, messageId, from, to, direction, status, body, rawPayload)
+* `Template` (wabaAccountId, name, language, status, history)
+* `Campaign`, `CampaignJob`
+  Add indexes: by `wabaAccountId`, `conversationId`, `message.createdAt`, unique constraints for message ids for dedupe.
+
+### Acceptance:
+
+* DB migrations run and create these tables; tests insert and query records.
+
+---
+
+## 11) Security & operational rules
+
+* **Token encryption:** AES-256 using `ENCRYPTION_KEY`. Decrypt only at call time.
+* **Signature verification:** capture rawBody, compute HMAC-SHA256 with `META_APP_SECRET`, compare timing-safe with `x-hub-signature-256`.
+* **Webhook handler:** persist & queue → return 200 fast.
+* **Rate limiting:** per phoneId with Redis sliding window or token bucket. Default 10 msg/s.
+* **Auth:** JWT for all shop APIs.
+* **Secrets handling:** never expose tokens to frontend.
+* **Logs & metrics:** capture webhook acceptance rate, queue latency, failed job counts. Provide `GET /health` and `GET /metrics`.
+
+### Acceptance:
+
+* A test shows invalid webhook signature rejected; rate limit enforced in campaign worker; tokens stored encrypted.
+
+---
+
+## 12) Testing plan (must execute before acceptance)
+
+* Unit tests: middleware (signature verification), token encryption/decryption, queue job handlers.
+* Integration tests:
+
+  * Mocked OAuth code exchange + Graph API responses → verify DB saved WABA, phoneId.
+  * Webhook POST sample → raw persisted + processed into conversation & message.
+  * Send message endpoint → simulates Graph API send → message saved + status updated on webhook simulation.
+* Manual tests:
+
+  * End-to-end Embedded Signup (with a test WABA account) OR simulated code flow if client provides a staging WABA merchant for dev.
+  * Campaign run test with 100 jobs verifying rate limiting.
+
+### Acceptance:
+
+* All tests passing; manual verification of an inbound message processed and visible in inbox.
+
+---
+
+## 13) Deployment & handover
+
+* Docker images for API & worker; push to registry.
+* Provide deployment manifest (docker-compose or k8s) and migration commands.
+* After deploying to production/staging:
+
+  * Send `WEBHOOK_PUBLIC_URL` and `REDIRECT_URI` to client (they will configure redirect or you will register).
+  * Run a live Embedded Signup onboarding test with merchant user.
+* Deliverables:
+
+  * Source code, migrations, README, Postman/Insomnia collection, runbook for replay/DLQ.
+  * Short screen-share or recorded walkthrough (optional).
+
+### Acceptance:
+
+* Live onboarding completes; webhook validated, messages can be sent & received for that merchant; inbox shows thread.
+
+---
+
+## 14) Failure modes & recovery
+
+* If webhook signature fails -> log and 401. Alert if signature fail rate > X%.
+* If worker repeatedly fails -> move event to DLQ and alert ops with event id. Provide `POST /webhooks/replay/:id`.
+* If Meta temporarily blocks deliveries -> reprocess stored raw events and/or request missing messages from Graph API if supported.
+
+### Acceptance:
+
+* DLQ shows example failing event and replay endpoint re-processes successfully after fix.
+
+---
+
+## 15) Final acceptance checklist (deliver to client)
+
+Before marking Stage 1 accepted, verify:
+
+* [ ] Embedded Signup end-to-end with at least one merchant (wabaId, phoneId saved)
+* [ ] Webhook registered & validated (GET challenge)
+* [ ] Webhook ingestion persists raw events and background worker processes them
+* [ ] Can send plain and template messages and receive status updates via webhook
+* [ ] Inbox shows conversations and messages
+* [ ] Campaign can be created and executed with rate limit enforced
+* [ ] Tokens encrypted, signature verification implemented, JWT auth in place
+* [ ] Dockerized deployment + README + Postman collection delivered
+* [ ] Replay/DLQ runbook provided
+
+---
+

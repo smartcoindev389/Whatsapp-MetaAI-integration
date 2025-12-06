@@ -1,7 +1,10 @@
-import { Controller, Post, Body, UseGuards, Request } from '@nestjs/common';
+import { Controller, Post, Body, Get, Query, UseGuards, Request, Res, HttpException } from '@nestjs/common';
+import { Response } from 'express';
+import { ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { LocalAuthGuard } from './guards/local-auth.guard';
 import { IsEmail, IsString, MinLength } from 'class-validator';
+import { WabaService } from '../waba/waba.service';
 
 class LoginDto {
   @IsEmail()
@@ -23,7 +26,11 @@ class RegisterDto {
 
 @Controller('auth')
 export class AuthController {
-  constructor(private authService: AuthService) {}
+  constructor(
+    private authService: AuthService,
+    private wabaService: WabaService,
+    private configService: ConfigService,
+  ) {}
 
   @Post('register')
   async register(@Body() registerDto: RegisterDto) {
@@ -35,6 +42,62 @@ export class AuthController {
   @Post('login')
   async login(@Request() req) {
     return this.authService.login(req.user);
+  }
+
+  @Get('embedded/callback')
+  async handleCallback(
+    @Query('code') code: string,
+    @Query('state') state: string,
+    @Query('error') error: string,
+    @Query('error_reason') errorReason: string,
+    @Query('error_description') errorDescription: string,
+    @Res() res: Response,
+  ) {
+    const frontendCallbackUrl = this.configService.get<string>('FRONTEND_CALLBACK_URL') || 
+      `${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173'}/onboarding/callback`;
+
+    // Handle OAuth errors from Meta
+    if (error) {
+      const errorParams = new URLSearchParams({
+        error: error || 'unknown_error',
+        error_reason: errorReason || '',
+        error_description: errorDescription || 'An error occurred during OAuth authentication',
+      });
+      return res.redirect(`${frontendCallbackUrl}?${errorParams.toString()}`);
+    }
+
+    // Handle missing authorization code
+    if (!code) {
+      const errorParams = new URLSearchParams({
+        error: 'missing_code',
+        error_description: 'No authorization code received from Meta',
+      });
+      return res.redirect(`${frontendCallbackUrl}?${errorParams.toString()}`);
+    }
+
+    try {
+      // Process the callback
+      const result = await this.wabaService.handleCallback(code, state);
+      
+      // Redirect to frontend with success (frontend will handle showing the result)
+      // We can pass the result as query params or let frontend fetch it
+      const successParams = new URLSearchParams({
+        success: 'true',
+        code: code, // Pass code so frontend can verify
+      });
+      return res.redirect(`${frontendCallbackUrl}?${successParams.toString()}`);
+    } catch (error) {
+      // Redirect to frontend with error details
+      const errorMessage = error instanceof HttpException 
+        ? error.message 
+        : error.message || 'Failed to process OAuth callback';
+      
+      const errorParams = new URLSearchParams({
+        error: 'callback_processing_error',
+        error_description: encodeURIComponent(errorMessage),
+      });
+      return res.redirect(`${frontendCallbackUrl}?${errorParams.toString()}`);
+    }
   }
 }
 

@@ -1,11 +1,14 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/lib/auth";
+import { api } from "@/lib/api";
 import { toast } from "sonner";
+import logo from "@/assets/logo.png";
 
 const Register = () => {
   const [email, setEmail] = useState("");
@@ -14,6 +17,7 @@ const Register = () => {
   const [isLoading, setIsLoading] = useState(false);
   const { register } = useAuth();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,10 +35,51 @@ const Register = () => {
     setIsLoading(true);
 
     try {
+      // Register user - this will set the token via api.setToken() in the register function
       await register(email, password);
-      toast.success("Registration successful!");
+      
+      // Token should now be in localStorage (set by api.register which calls api.setToken)
+      // Verify token is available
+      let token = localStorage.getItem('auth_token');
+      let retries = 0;
+      while (!token && retries < 5) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        token = localStorage.getItem('auth_token');
+        retries++;
+      }
+      
+      if (!token) {
+        console.error("Token not found after registration after retries");
+        toast.error("Registration succeeded but authentication failed. Please login again.");
+        navigate("/login");
+        return;
+      }
+
+      // Auto-create a default shop for the new user
+      // Token is now definitely set, so shop creation should work
+      try {
+        const shop = await api.createShop("My Shop");
+        console.log("Shop created successfully:", shop);
+        // Invalidate shops query so all pages refresh
+        queryClient.invalidateQueries({ queryKey: ['shops'] });
+        toast.success("Registration successful! Default shop created.");
+      } catch (shopError: any) {
+        // Shop creation failed, but user is registered
+        console.error("Failed to create shop:", shopError);
+        const errorMessage = shopError?.message || shopError?.error || "Unknown error";
+        console.error("Shop creation error details:", {
+          message: errorMessage,
+          error: shopError,
+          token: token ? "Token exists" : "No token",
+          status: shopError?.response?.status,
+          statusText: shopError?.response?.statusText
+        });
+        toast.warning(`Registration successful! Shop creation failed: ${errorMessage}. You can create one later.`);
+      }
+      
       navigate("/");
     } catch (error: any) {
+      console.error("Registration error:", error);
       toast.error(error.message || "Registration failed");
     } finally {
       setIsLoading(false);
@@ -43,7 +88,18 @@ const Register = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted p-4">
-      <Card className="w-full max-w-md">
+      <div className="w-full max-w-5xl flex flex-col md:flex-row items-center gap-8">
+        {/* Logo Section */}
+        <div className="w-full md:w-1/2 flex items-center justify-center">
+          <img 
+            src={logo} 
+            alt="Logo" 
+            className="w-full max-w-md h-auto object-contain"
+          />
+        </div>
+        
+        {/* Form Section */}
+        <Card className="w-full md:w-1/2 max-w-md">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold text-center">Create an account</CardTitle>
           <CardDescription className="text-center">
@@ -106,6 +162,7 @@ const Register = () => {
           </form>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 };

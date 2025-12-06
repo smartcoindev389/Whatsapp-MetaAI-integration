@@ -25,7 +25,15 @@ export class WebhooksController {
   @Post('meta')
   async handleWebhook(@Req() req: Request, @Res() res: Response) {
     const signature = req.headers['x-hub-signature-256'] as string;
-    const rawBody = JSON.stringify(req.body);
+    
+    // Get raw body from request (stored by middleware) or fallback to stringified body
+    let rawBody: string;
+    if ((req as any).rawBody) {
+      rawBody = (req as any).rawBody;
+    } else {
+      // Fallback: reconstruct from parsed body (less secure but works)
+      rawBody = JSON.stringify(req.body);
+    }
 
     // Verify signature
     if (!this.webhooksService.verifySignature(signature, rawBody)) {

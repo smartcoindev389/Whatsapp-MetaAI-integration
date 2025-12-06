@@ -44,6 +44,9 @@ model WabaAccount {
   campaigns       Campaign[]
   conversations   Conversation[]
   webhookEvents   WebhookEvent[]
+
+  @@index([shopId])
+  @@index([wabaId])
 }
 
 model WebhookEvent {
@@ -55,6 +58,10 @@ model WebhookEvent {
   receivedAt DateTime     @default(now())
   processed  Boolean      @default(false)
   error      String?
+
+  @@index([wabaId])
+  @@index([processed])
+  @@index([receivedAt])
 }
 
 model Conversation {
@@ -65,6 +72,10 @@ model Conversation {
   lastAt        DateTime  @default(now())
   unreadCount   Int       @default(0)
   messages      Message[]
+
+  @@index([wabaAccountId])
+  @@index([wabaAccountId, contactNumber])
+  @@index([lastAt])
 }
 
 model Message {
@@ -73,7 +84,7 @@ model Message {
   conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
   wabaAccountId  String
   wabaAccount    WabaAccount   @relation(fields: [wabaAccountId], references: [id], onDelete: Cascade)
-  messageId      String?       // Meta message id
+  messageId      String?       @unique // Meta message id - unique for deduplication
   from           String
   to             String
   direction      String        // inbound | outbound
@@ -82,6 +93,12 @@ model Message {
   rawPayload     Json?
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
+
+  @@index([wabaAccountId])
+  @@index([conversationId])
+  @@index([createdAt])
+  @@index([messageId])
+  @@index([wabaAccountId, createdAt])
 }
 
 model Template {
@@ -94,6 +111,9 @@ model Template {
   history       Json?
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
+
+  @@index([wabaAccountId])
+  @@index([status])
 }
 
 model Campaign {
@@ -106,6 +126,10 @@ model Campaign {
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
   jobs          CampaignJob[]
+
+  @@index([wabaAccountId])
+  @@index([status])
+  @@index([createdAt])
 }
 
 model CampaignJob {
@@ -118,5 +142,8 @@ model CampaignJob {
   lastError  String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+
+  @@index([campaignId])
+  @@index([status])
 }
 

@@ -1,10 +1,30 @@
 import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { api } from "@/lib/api";
+import { toast } from "sonner";
 import {
   Plus,
   Search,
@@ -17,23 +37,68 @@ import {
 } from "lucide-react";
 
 const Templates = () => {
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [wabaAccountId, setWabaAccountId] = useState<string | null>(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [templateName, setTemplateName] = useState("");
+  const [templateLanguage, setTemplateLanguage] = useState("en");
+  const [templateCategory, setTemplateCategory] = useState("MARKETING");
+  const [templateBody, setTemplateBody] = useState("");
+  const queryClient = useQueryClient();
+
+  // Use React Query for shops to enable automatic refresh
+  const { data: shops = [] } = useQuery({
+    queryKey: ['shops'],
+    queryFn: () => api.getShops(),
+    refetchOnWindowFocus: true,
+  });
 
   useEffect(() => {
-    api.getShops()
-      .then((shops) => {
-        if (shops.length > 0 && shops[0].waba && shops[0].waba.length > 0) {
-          setWabaAccountId(shops[0].waba[0].id);
-        }
-      })
-      .catch(() => {});
-  }, []);
+    // Get first shop's WABA account
+    if (shops.length > 0 && shops[0].waba && shops[0].waba.length > 0) {
+      setWabaAccountId(shops[0].waba[0].id);
+    }
+  }, [shops]);
 
   const { data: templates = [], isLoading } = useQuery({
     queryKey: ['templates', wabaAccountId],
     queryFn: () => wabaAccountId ? api.getTemplates(wabaAccountId) : Promise.resolve([]),
     enabled: !!wabaAccountId,
+  });
+
+  const submitTemplateMutation = useMutation({
+    mutationFn: async () => {
+      if (!wabaAccountId) {
+        throw new Error("Please connect a WhatsApp Business Account first. Go to Onboarding page to connect.");
+      }
+      if (!templateName.trim()) throw new Error("Template name is required");
+      if (!templateBody.trim()) throw new Error("Template body is required");
+
+      const templateData = {
+        name: templateName,
+        language: templateLanguage,
+        category: templateCategory,
+        components: [
+          {
+            type: "BODY",
+            text: templateBody,
+          },
+        ],
+      };
+
+      return api.submitTemplate(wabaAccountId, templateData);
+    },
+    onSuccess: () => {
+      toast.success("Template submitted successfully!");
+      setIsDialogOpen(false);
+      setTemplateName("");
+      setTemplateBody("");
+      queryClient.invalidateQueries({ queryKey: ['templates', wabaAccountId] });
+    },
+    onError: (error: any) => {
+      toast.error(error.message || "Failed to submit template");
+    },
   });
 
   const filteredTemplates = templates.filter((template: any) =>
@@ -86,10 +151,112 @@ const Templates = () => {
             Manage your WhatsApp message templates
           </p>
         </div>
-        <Button className="bg-gradient-primary hover:opacity-90 transition-opacity">
-          <Plus className="h-4 w-4 mr-2" />
-          Create Template
-        </Button>
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogTrigger asChild>
+            <Button className="bg-gradient-primary hover:opacity-90 transition-opacity">
+              <Plus className="h-4 w-4 mr-2" />
+              Create Template
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Submit New Template</DialogTitle>
+              <DialogDescription>
+                Create and submit a new WhatsApp message template to Meta for approval.
+              </DialogDescription>
+            </DialogHeader>
+            {!wabaAccountId ? (
+              <div className="py-8 text-center">
+                <p className="text-muted-foreground mb-4">
+                  You need to connect a WhatsApp Business Account first to submit templates.
+                </p>
+                <Button onClick={() => {
+                  setIsDialogOpen(false);
+                  navigate('/onboarding');
+                }}>
+                  Go to Onboarding
+                </Button>
+              </div>
+            ) : (
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="template-name">Template Name</Label>
+                <Input
+                  id="template-name"
+                  placeholder="hello_world"
+                  value={templateName}
+                  onChange={(e) => setTemplateName(e.target.value)}
+                  className="lowercase"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Use lowercase letters, numbers, and underscores only
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="template-language">Language</Label>
+                  <Select value={templateLanguage} onValueChange={setTemplateLanguage}>
+                    <SelectTrigger id="template-language">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="en">English (en)</SelectItem>
+                      <SelectItem value="pt_BR">Portuguese - Brazil (pt_BR)</SelectItem>
+                      <SelectItem value="es">Spanish (es)</SelectItem>
+                      <SelectItem value="fr">French (fr)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="template-category">Category</Label>
+                  <Select value={templateCategory} onValueChange={setTemplateCategory}>
+                    <SelectTrigger id="template-category">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="MARKETING">MARKETING</SelectItem>
+                      <SelectItem value="UTILITY">UTILITY</SelectItem>
+                      <SelectItem value="AUTHENTICATION">AUTHENTICATION</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="template-body">Message Body</Label>
+                <Textarea
+                  id="template-body"
+                  placeholder="Hello {{1}}, welcome to our service!"
+                  value={templateBody}
+                  onChange={(e) => setTemplateBody(e.target.value)}
+                  className="min-h-[150px]"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Use {"{{1}}"}, {"{{2}}"}, etc. for variable placeholders
+                </p>
+              </div>
+            </div>
+            )}
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setIsDialogOpen(false)}
+                disabled={submitTemplateMutation.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => submitTemplateMutation.mutate()}
+                disabled={submitTemplateMutation.isPending || !templateName.trim() || !templateBody.trim() || !wabaAccountId}
+                className="bg-gradient-primary hover:opacity-90"
+              >
+                {submitTemplateMutation.isPending ? "Submitting..." : "Submit Template"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* Search & Filters */}

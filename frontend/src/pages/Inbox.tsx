@@ -26,16 +26,19 @@ const Inbox = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const queryClient = useQueryClient();
 
+  // Use React Query for shops to enable automatic refresh
+  const { data: shops = [] } = useQuery({
+    queryKey: ['shops'],
+    queryFn: () => api.getShops(),
+    refetchOnWindowFocus: true,
+  });
+
   useEffect(() => {
     // Get first shop's WABA account
-    api.getShops()
-      .then((shops) => {
-        if (shops.length > 0 && shops[0].waba && shops[0].waba.length > 0) {
-          setWabaAccountId(shops[0].waba[0].id);
-        }
-      })
-      .catch(() => {});
-  }, []);
+    if (shops.length > 0 && shops[0].waba && shops[0].waba.length > 0) {
+      setWabaAccountId(shops[0].waba[0].id);
+    }
+  }, [shops]);
 
   const { data: conversationsData, isLoading: conversationsLoading } = useQuery({
     queryKey: ['conversations', wabaAccountId],
@@ -153,13 +156,14 @@ const Inbox = () => {
               <h3 className="font-semibold">{selectedConv.contactNumber}</h3>
               <p className="text-xs text-muted-foreground">{selectedConv.contactNumber}</p>
             </div>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon">
-              <Tag className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon">
-              <MoreVertical className="h-4 w-4" />
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="icon">
+                <Tag className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="icon">
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         ) : (
           <div className="h-16 border-b border-border px-6 flex items-center justify-center bg-card/50">

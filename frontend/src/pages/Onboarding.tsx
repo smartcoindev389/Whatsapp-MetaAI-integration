@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { api } from "@/lib/api";
+import { toast } from "sonner";
 import {
   CheckCircle2,
   Circle,
@@ -16,22 +17,56 @@ import {
 const Onboarding = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const [shopId, setShopId] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+
+  // Fetch shops
+  const { data: shops = [], isLoading: shopsLoading } = useQuery({
+    queryKey: ['shops'],
+    queryFn: () => api.getShops(),
+    refetchOnWindowFocus: true,
+  });
 
   useEffect(() => {
-    api.getShops()
-      .then((shops) => {
-        if (shops.length > 0) {
-          setShopId(shops[0].id);
-        }
-      })
-      .catch(() => {});
-  }, []);
+    if (shops.length > 0) {
+      setShopId(shops[0].id);
+    }
+  }, [shops]);
 
-  const { data: signupData, isLoading: signupLoading } = useQuery({
+  const { data: signupData, isLoading: signupLoading, error: signupError } = useQuery({
     queryKey: ['embedded-signup', shopId],
     queryFn: () => shopId ? api.getEmbeddedSignupUrl(shopId) : Promise.resolve({ url: '' }),
-    enabled: !!shopId && currentStep === 1,
+    enabled: !!shopId,
+    retry: 1,
   });
+
+  // Get all WABA accounts from all shops
+  const allWabaAccounts = shops.flatMap((shop: any) => shop.waba || []);
+  const hasWabaAccounts = allWabaAccounts.length > 0;
+
+  const handleConnectNew = () => {
+    if (signupData?.url) {
+      window.location.href = signupData.url;
+    } else if (!shopId) {
+      toast.error("Please wait for shops to load.");
+    } else if (signupLoading) {
+      toast.info("Generating connection URL...");
+    } else {
+      // Try to refetch if URL is not available
+      queryClient.invalidateQueries({ queryKey: ['embedded-signup', shopId] });
+      toast.info("Refreshing connection URL...");
+    }
+  };
+
+  // Dynamic step status based on actual state
+  const getStepStatus = (stepId: number) => {
+    if (stepId === 1) {
+      return hasWabaAccounts ? "completed" : "current";
+    } else if (stepId === 2) {
+      return hasWabaAccounts ? "current" : "pending";
+    } else {
+      return "pending";
+    }
+  };
 
   const steps = [
     {
@@ -39,43 +74,31 @@ const Onboarding = () => {
       title: "Connect Meta Account",
       description: "Authenticate with Facebook/Meta to access WhatsApp Business API",
       icon: LinkIcon,
-      status: "completed",
+      status: getStepStatus(1),
     },
     {
       id: 2,
       title: "Select WABA & Phone",
       description: "Choose your WhatsApp Business Account and phone number",
       icon: Phone,
-      status: "current",
+      status: getStepStatus(2),
     },
     {
       id: 3,
       title: "Configure Webhooks",
       description: "Set up webhook URL to receive messages and events",
       icon: Webhook,
-      status: "pending",
+      status: getStepStatus(3),
     },
     {
       id: 4,
       title: "Review & Complete",
       description: "Review permissions and finalize setup",
       icon: SettingsIcon,
-      status: "pending",
+      status: getStepStatus(4),
     },
   ];
 
-  const connectedAccounts = [
-    {
-      id: "1",
-      name: "My Business WABA",
-      waba_id: "123456789012345",
-      phone_numbers: [
-        { id: "p1", number: "+55 11 98765-4321", verified: true, status: "active" },
-        { id: "p2", number: "+55 21 91234-5678", verified: true, status: "active" },
-      ],
-      status: "active",
-    },
-  ];
 
   return (
     <div className="p-8 space-y-8 animate-fade-in">
@@ -132,12 +155,11 @@ const Onboarding = () => {
         {/* Instructions */}
         <Card className="bg-card border-border">
           <CardHeader>
-            <CardTitle>Step {currentStep}: Select WABA & Phone</CardTitle>
+            <CardTitle>Step 1: Connect Meta Account</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Choose the WhatsApp Business Account (WABA) and phone number you want to connect to
-              this platform. You can connect multiple phone numbers from the same WABA.
+              Connect your Facebook/Meta account to access WhatsApp Business API. You'll be redirected to Meta's authorization page to grant necessary permissions.
             </p>
             <div className="space-y-2">
               <h4 className="text-sm font-semibold">Required Permissions:</h4>
@@ -156,12 +178,62 @@ const Onboarding = () => {
                 </li>
               </ul>
             </div>
-            {signupData?.url && (
+            {shopsLoading ? (
               <Button 
                 className="w-full bg-gradient-primary hover:opacity-90"
-                onClick={() => window.location.href = signupData.url}
+                disabled
               >
+                Loading shops...
+              </Button>
+            ) : !shopId ? (
+              <div className="space-y-2">
+                <Button 
+                  className="w-full bg-gradient-primary hover:opacity-90"
+                  disabled
+                >
+                  Please create a shop first
+                </Button>
+                <p className="text-xs text-muted-foreground text-center">
+                  A shop is automatically created when you register. Please refresh the page or contact support if you don't see your shop.
+                </p>
+              </div>
+            ) : signupLoading ? (
+              <Button 
+                className="w-full bg-gradient-primary hover:opacity-90"
+                disabled
+              >
+                Generating connection URL...
+              </Button>
+            ) : signupError ? (
+              <div className="space-y-2">
+                <Button 
+                  className="w-full bg-gradient-primary hover:opacity-90"
+                  disabled
+                >
+                  Error loading connection URL
+                </Button>
+                <p className="text-xs text-destructive text-center">
+                  Failed to generate connection URL. Please try refreshing the page.
+                </p>
+              </div>
+            ) : signupData?.url ? (
+              <Button 
+                className="w-full bg-gradient-primary hover:opacity-90"
+                onClick={() => {
+                  if (signupData?.url) {
+                    window.location.href = signupData.url;
+                  }
+                }}
+              >
+                <LinkIcon className="h-4 w-4 mr-2" />
                 Connect Meta Account
+              </Button>
+            ) : (
+              <Button 
+                className="w-full bg-gradient-primary hover:opacity-90"
+                disabled
+              >
+                Preparing connection...
               </Button>
             )}
           </CardContent>
@@ -172,63 +244,89 @@ const Onboarding = () => {
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
               <span>Connected Accounts</span>
-              <Button variant="outline" size="sm">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={handleConnectNew}
+                disabled={!signupData?.url || signupLoading}
+              >
                 <LinkIcon className="h-4 w-4 mr-2" />
                 Connect New
               </Button>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {connectedAccounts.map((account) => (
-              <div
-                key={account.id}
-                className="p-4 bg-muted/30 rounded-lg space-y-3 hover:bg-muted/50 transition-colors"
-              >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h4 className="font-semibold">{account.name}</h4>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      WABA ID: {account.waba_id}
-                    </p>
+            {shopsLoading ? (
+              <div className="text-center py-8 text-muted-foreground">Loading accounts...</div>
+            ) : allWabaAccounts.length === 0 ? (
+              <div className="text-center py-8">
+                <Circle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-sm text-muted-foreground mb-4">
+                  No WhatsApp Business Accounts connected yet.
+                </p>
+                <Button 
+                  variant="outline"
+                  onClick={handleConnectNew}
+                  disabled={!signupData?.url || signupLoading || !shopId}
+                >
+                  <LinkIcon className="h-4 w-4 mr-2" />
+                  {signupLoading ? "Loading..." : signupData?.url ? "Connect Your First Account" : "Preparing..."}
+                </Button>
+              </div>
+            ) : (
+              allWabaAccounts.map((waba: any) => (
+                <div
+                  key={waba.id}
+                  className="p-4 bg-muted/30 rounded-lg space-y-3 hover:bg-muted/50 transition-colors"
+                >
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h4 className="font-semibold">WhatsApp Business Account</h4>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        WABA ID: {waba.wabaId}
+                      </p>
+                    </div>
+                    <Badge className={`${
+                      waba.webhookVerified 
+                        ? "bg-success/20 text-success border-success/30"
+                        : "bg-warning/20 text-warning border-warning/30"
+                    }`}>
+                      {waba.webhookVerified ? (
+                        <>
+                          <CheckCircle2 className="h-3 w-3 mr-1" />
+                          Connected
+                        </>
+                      ) : (
+                        <>
+                          <Circle className="h-3 w-3 mr-1" />
+                          Pending
+                        </>
+                      )}
+                    </Badge>
                   </div>
-                  <Badge className="bg-success/20 text-success border-success/30">
-                    <CheckCircle2 className="h-3 w-3 mr-1" />
-                    {account.status}
-                  </Badge>
-                </div>
 
-                <div className="space-y-2">
-                  <p className="text-xs font-semibold text-muted-foreground">
-                    Connected Phone Numbers:
-                  </p>
-                  {account.phone_numbers.map((phone) => (
-                    <div
-                      key={phone.id}
-                      className="flex items-center justify-between p-2 bg-background rounded"
-                    >
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold text-muted-foreground">
+                      Phone Number:
+                    </p>
+                    <div className="flex items-center justify-between p-2 bg-background rounded">
                       <div className="flex items-center gap-2">
                         <Phone className="h-4 w-4 text-primary" />
-                        <span className="text-sm">{phone.number}</span>
-                        {phone.verified && (
+                        <span className="text-sm">{waba.displayNumber}</span>
+                        {waba.webhookVerified && (
                           <CheckCircle2 className="h-3 w-3 text-success" />
                         )}
                       </div>
                       <Badge variant="outline" className="text-xs">
-                        {phone.status}
+                        {waba.webhookVerified ? "Active" : "Setting up"}
                       </Badge>
                     </div>
-                  ))}
+                    <p className="text-xs text-muted-foreground">
+                      Phone ID: {waba.phoneId}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            ))}
-
-            {connectedAccounts.length === 0 && (
-              <div className="text-center py-8">
-                <Circle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <p className="text-sm text-muted-foreground">
-                  No accounts connected yet. Click "Connect New" to get started.
-                </p>
-              </div>
+              ))
             )}
           </CardContent>
         </Card>
