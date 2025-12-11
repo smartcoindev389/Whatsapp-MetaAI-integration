@@ -1,16 +1,15 @@
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
 import {
-  LayoutDashboard,
+  Home,
   MessageSquare,
-  FileText,
+  FileCheck,
   Megaphone,
-  Settings,
-  BarChart3,
-  Link as LinkIcon,
+  PlugZap,
+  Wifi,
+  Building2,
+  Users,
 } from "lucide-react";
-import headerLogo from "@/assets/header-logo.png";
-import markWhite from "@/assets/mark-white.png";
 import {
   Sidebar,
   SidebarContent,
@@ -24,16 +23,23 @@ import {
 } from "@/components/ui/sidebar";
 
 const mainItems = [
-  { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "Inbox", url: "/inbox", icon: MessageSquare },
-  { title: "Templates", url: "/templates", icon: FileText },
-  { title: "Campaigns", url: "/campaigns", icon: Megaphone },
+  { title: "Painel", url: "/", icon: Home },
+  { title: "Conversas", url: "/conversas", icon: MessageSquare },
+  { title: "Mensagens Aprovadas", url: "/mensagens-aprovadas", icon: FileCheck },
+  { title: "Campanhas", url: "/campanhas", icon: Megaphone },
+];
+
+const whatsappItems = [
+  { title: "Conectar WhatsApp Oficial", url: "/conectar-whatsapp", icon: PlugZap },
+  { title: "Status da Conexão", url: "/status-conexao", icon: Wifi },
 ];
 
 const settingsItems = [
-  { title: "Onboarding", url: "/onboarding", icon: LinkIcon },
-  { title: "Analytics", url: "/analytics", icon: BarChart3 },
-  { title: "Settings", url: "/settings", icon: Settings },
+  { title: "Perfil da Empresa", url: "/perfil-empresa", icon: Building2 },
+];
+
+const agencyItems = [
+  { title: "Gerenciar Múltiplas Empresas", url: "/agencia", icon: Users },
 ];
 
 export function AppSidebar() {
@@ -51,25 +57,21 @@ export function AppSidebar() {
         {/* Logo */}
         <div className="px-6 mb-6">
           <div className="flex items-center gap-3">
-            {open ? (
-              <img 
-                src={headerLogo} 
-                alt="Salva Zap" 
-                className="h-10 w-auto object-contain"
-              />
-            ) : (
-              <img 
-                src={markWhite} 
-                alt="Salva Zap" 
-                className="h-10 w-10 object-contain"
-              />
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#25D366] to-[#128C7E] flex items-center justify-center">
+              <MessageSquare className="h-6 w-6 text-white" />
+            </div>
+            {open && (
+              <div>
+                <h1 className="text-lg font-bold">WhatsApp</h1>
+                <p className="text-xs text-muted-foreground">Cloud API</p>
+              </div>
             )}
           </div>
         </div>
 
-        {/* Main Navigation */}
+        {/* Principal */}
         <SidebarGroup>
-          <SidebarGroupLabel>Main</SidebarGroupLabel>
+          <SidebarGroupLabel>Principal</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {mainItems.map((item) => (
@@ -90,9 +92,32 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* Settings Navigation */}
+        {/* WhatsApp Oficial */}
         <SidebarGroup>
-          <SidebarGroupLabel>Configuration</SidebarGroupLabel>
+          <SidebarGroupLabel>WhatsApp Oficial</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {whatsappItems.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton asChild isActive={isActive(item.url)}>
+                    <NavLink
+                      to={item.url}
+                      className="flex items-center gap-3 transition-colors"
+                      activeClassName="bg-sidebar-accent text-primary font-medium"
+                    >
+                      <item.icon className="h-5 w-5" />
+                      <span>{item.title}</span>
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        {/* Configurações */}
+        <SidebarGroup>
+          <SidebarGroupLabel>Configurações</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {settingsItems.map((item) => (
@@ -102,6 +127,29 @@ export function AppSidebar() {
                       to={item.url}
                       className="flex items-center gap-3 transition-colors"
                       activeClassName="bg-sidebar-accent text-primary font-medium"
+                    >
+                      <item.icon className="h-5 w-5" />
+                      <span>{item.title}</span>
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        {/* Módulo Agência - Visual Azul */}
+        <SidebarGroup>
+          <SidebarGroupLabel className="text-[#0EA5E9]">Módulo Agência</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {agencyItems.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton asChild isActive={isActive(item.url)}>
+                    <NavLink
+                      to={item.url}
+                      className="flex items-center gap-3 transition-colors text-[#0EA5E9] hover:text-[#0EA5E9] hover:bg-[#0EA5E9]/10"
+                      activeClassName="bg-[#0EA5E9]/20 text-[#0EA5E9] font-medium"
                     >
                       <item.icon className="h-5 w-5" />
                       <span>{item.title}</span>
