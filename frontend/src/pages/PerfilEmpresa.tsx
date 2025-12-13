@@ -66,14 +66,14 @@ const PerfilEmpresa = () => {
   const { user } = useAuth();
   const { activeShop } = useActiveWaba();
   const [formData, setFormData] = useState({
-    nome: activeShop?.name || "Minha Empresa Ltda",
-    email: user?.email || "contato@minhaempresa.com.br",
-    telefone: "+55 11 99999-9999",
-    nicho: "restaurante",
+    nome: "",
+    email: "",
+    telefone: "",
+    nicho: "outro",
     nichoOutro: "",
-    linkPrincipal: "https://minhaloja.com.br/cardapio",
+    linkPrincipal: "",
     linkSecundario: "",
-    instagram: "@minhaempresa",
+    instagram: "",
   });
 
   const [horarios, setHorarios] = useState<HorariosType>({
@@ -88,10 +88,10 @@ const PerfilEmpresa = () => {
 
   useEffect(() => {
     if (activeShop) {
-      setFormData((prev) => ({ ...prev, nome: activeShop.name }));
+      setFormData((prev) => ({ ...prev, nome: activeShop.name || "" }));
     }
     if (user?.email) {
-      setFormData((prev) => ({ ...prev, email: user.email }));
+      setFormData((prev) => ({ ...prev, email: user.email || "" }));
     }
   }, [activeShop, user]);
 
