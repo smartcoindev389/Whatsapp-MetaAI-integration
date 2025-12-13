@@ -21,6 +21,8 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import headerLogo from "@/assets/header-logo.png";
+import markWhite from "@/assets/mark-white.png";
 
 const mainItems = [
   { title: "Painel", url: "/", icon: Home },
@@ -57,14 +59,18 @@ export function AppSidebar() {
         {/* Logo */}
         <div className="px-6 mb-6">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#25D366] to-[#128C7E] flex items-center justify-center">
-              <MessageSquare className="h-6 w-6 text-white" />
-            </div>
-            {open && (
-              <div>
-                <h1 className="text-lg font-bold">WhatsApp</h1>
-                <p className="text-xs text-muted-foreground">Cloud API</p>
-              </div>
+            {open ? (
+              <img 
+                src={headerLogo} 
+                alt="Salva Zap" 
+                className="h-10 w-auto object-contain"
+              />
+            ) : (
+              <img 
+                src={markWhite} 
+                alt="Salva Zap" 
+                className="h-10 w-10 object-contain"
+              />
             )}
           </div>
         </div>

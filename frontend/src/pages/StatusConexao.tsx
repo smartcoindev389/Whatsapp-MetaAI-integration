@@ -1,3 +1,5 @@
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,9 +19,19 @@ import {
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useActiveWaba } from "@/hooks/use-active-waba";
+import { api } from "@/lib/api";
 
 const StatusConexao = () => {
   const { activeWaba } = useActiveWaba();
+
+  const {
+    data: dashboard,
+    isLoading: statsLoading,
+  } = useQuery({
+    queryKey: ["dashboard", activeWaba?.id],
+    queryFn: () => api.getDashboardStats(activeWaba!.id),
+    enabled: !!activeWaba?.id,
+  });
 
   const connectionData = activeWaba
     ? {
@@ -29,7 +41,7 @@ const StatusConexao = () => {
         phoneNumber: activeWaba.displayNumber,
         displayName: activeWaba.displayNumber,
         status: activeWaba.webhookVerified ? "active" : "pending",
-        lastSync: activeWaba.updatedAt || "—",
+        lastSync: activeWaba.updatedAt ? new Date(activeWaba.updatedAt).toLocaleString("pt-BR") : "—",
         businessVerified: activeWaba.webhookVerified,
     accountType: "Business",
       }
@@ -45,18 +57,88 @@ const StatusConexao = () => {
         accountType: "—",
   };
 
-  const qualityData = {
-    rating: connectionData.connected ? 80 : 0,
-    status: (connectionData.connected ? "green" : "red") as "green" | "yellow" | "red",
-  };
+  // Calculate quality rating from dashboard stats
+  const qualityData = useMemo(() => {
+    if (!connectionData.connected || !dashboard) {
+      return {
+        rating: 0,
+        status: "red" as "green" | "yellow" | "red",
+      };
+    }
 
-  const tierData = {
-    current: connectionData.connected ? "Ativo" : "Offline",
-    currentLimit: connectionData.connected ? 10000 : 0,
-    nextTier: connectionData.connected ? "Expansão" : "Conectar",
-    nextTierLimit: connectionData.connected ? 100000 : 0,
-    progress: connectionData.connected ? 65 : 0,
-  };
+    // Quality rating is based on delivery rate and read rate
+    // Average of both rates, weighted: 60% delivery, 40% read
+    const deliveryWeight = 0.6;
+    const readWeight = 0.4;
+    const baseRating = (dashboard.delivery_rate || 0) * deliveryWeight + (dashboard.read_rate || 0) * readWeight;
+    const rating = Math.max(0, Math.min(100, Math.round(baseRating)));
+
+    let status: "green" | "yellow" | "red";
+    if (rating >= 80) {
+      status = "green";
+    } else if (rating >= 40) {
+      status = "yellow";
+    } else {
+      status = "red";
+    }
+
+    return { rating, status };
+  }, [connectionData.connected, dashboard]);
+
+  // Calculate tier based on messages sent
+  const tierData = useMemo(() => {
+    if (!connectionData.connected) {
+      return {
+        current: "Offline",
+        currentLimit: 0,
+        nextTier: "Conectar",
+        nextTierLimit: 50,
+        progress: 0,
+      };
+    }
+
+    const messagesSent = dashboard?.messages_sent_24h || 0;
+    
+    // Tier thresholds: 50, 250, 1k, 10k, 100k
+    const tiers = [
+      { name: "Inicial", limit: 50 },
+      { name: "Básico", limit: 250 },
+      { name: "Intermediário", limit: 1000 },
+      { name: "Avançado", limit: 10000 },
+      { name: "Enterprise", limit: 100000 },
+    ];
+
+    let currentTier = tiers[0];
+    let nextTier = tiers[1];
+    let progress = 0;
+
+    for (let i = 0; i < tiers.length; i++) {
+      if (messagesSent < tiers[i].limit) {
+        currentTier = i > 0 ? tiers[i - 1] : tiers[0];
+        nextTier = tiers[i];
+        const currentLimit = currentTier.limit;
+        const nextLimit = nextTier.limit;
+        const range = nextLimit - currentLimit;
+        const progressInRange = messagesSent - currentLimit;
+        progress = Math.max(0, Math.min(100, Math.round((progressInRange / range) * 100)));
+        break;
+      }
+      if (i === tiers.length - 1) {
+        // At max tier
+        currentTier = tiers[i];
+        nextTier = tiers[i];
+        progress = 100;
+      }
+    }
+
+    return {
+      current: currentTier.name,
+      currentLimit: currentTier.limit,
+      nextTier: nextTier.name,
+      nextTierLimit: nextTier.limit,
+      progress,
+    };
+  }, [connectionData.connected, dashboard]);
 
   const getQualityColor = (status: string) => {
     switch (status) {
@@ -102,7 +184,7 @@ const StatusConexao = () => {
   };
 
   return (
-    <div className="p-8 space-y-8 animate-fade-in">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6 sm:space-y-8 animate-fade-in">
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Status da Conexão</h1>
@@ -113,47 +195,48 @@ const StatusConexao = () => {
 
       {/* Card 1 - Status da Conexão */}
       <Card className="bg-card border-border">
-        <CardContent className="p-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+        <CardContent className="p-4 sm:p-6">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div className="flex items-center gap-3 sm:gap-4">
               {connectionData.connected ? (
-                <div className="w-16 h-16 rounded-full bg-[#25D366]/20 flex items-center justify-center">
-                  <Wifi className="h-8 w-8 text-[#25D366]" />
+                <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-[#25D366]/20 flex items-center justify-center shrink-0">
+                  <Wifi className="h-6 w-6 sm:h-8 sm:w-8 text-[#25D366]" />
                 </div>
               ) : (
-                <div className="w-16 h-16 rounded-full bg-destructive/20 flex items-center justify-center">
-                  <WifiOff className="h-8 w-8 text-destructive" />
+                <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-destructive/20 flex items-center justify-center shrink-0">
+                  <WifiOff className="h-6 w-6 sm:h-8 sm:w-8 text-destructive" />
                 </div>
               )}
-              <div>
-                <div className="flex items-center gap-3">
-                  <h2 className="text-2xl font-bold">WhatsApp Business API</h2>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+                  <h2 className="text-xl sm:text-2xl font-bold truncate">WhatsApp Business API</h2>
                   <Badge
                     className={
                       connectionData.connected
-                        ? "bg-[#25D366] hover:bg-[#25D366]"
-                        : "bg-destructive"
+                        ? "bg-[#25D366] hover:bg-[#25D366] shrink-0"
+                        : "bg-destructive shrink-0"
                     }
                   >
                     {connectionData.connected ? "Conectado" : "Desconectado"}
                   </Badge>
                 </div>
-                <p className="text-lg text-muted-foreground mt-1">
+                <p className="text-base sm:text-lg text-muted-foreground mt-1 truncate">
                   {connectionData.phoneNumber}
                 </p>
-                <p className="text-sm text-muted-foreground">
-                  Última sincronização: {connectionData.lastSync}
+                <p className="text-xs sm:text-sm text-muted-foreground">
+                  Última sincronização: {statsLoading ? "Carregando..." : connectionData.lastSync}
                 </p>
               </div>
             </div>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={handleReconnect}>
+            <div className="flex flex-col sm:flex-row gap-2 shrink-0">
+              <Button variant="outline" onClick={handleReconnect} className="w-full sm:w-auto">
                 <RefreshCw className="h-4 w-4 mr-2" />
-                Reconectar WhatsApp Oficial
+                <span className="hidden sm:inline">Reconectar WhatsApp Oficial</span>
+                <span className="sm:hidden">Reconectar</span>
               </Button>
               <Button
                 variant="outline"
-                className="text-destructive hover:text-destructive"
+                className="text-destructive hover:text-destructive w-full sm:w-auto"
                 onClick={handleDisconnect}
               >
                 <Unplug className="h-4 w-4 mr-2" />
@@ -168,17 +251,17 @@ const StatusConexao = () => {
         {/* Card 2 - Qualidade da Conta */}
         <Card className="bg-card border-border">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Shield className={`h-5 w-5 ${quality.text}`} />
-              Qualidade da Conta (Quality Rating)
+            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+              <Shield className={`h-4 w-4 sm:h-5 sm:w-5 ${quality.text} shrink-0`} />
+              <span className="truncate">Qualidade da Conta (Quality Rating)</span>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className={`w-12 h-12 rounded-full ${quality.bg} flex items-center justify-center`}>
-                  <span className={`text-xl font-bold ${quality.text}`}>
-                    {qualityData.rating}%
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full ${quality.bg} flex items-center justify-center shrink-0`}>
+                  <span className={`text-lg sm:text-xl font-bold ${quality.text}`}>
+                    {statsLoading ? "—" : `${qualityData.rating}%`}
                   </span>
                 </div>
                 <div>
@@ -192,12 +275,12 @@ const StatusConexao = () => {
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Pontuação</span>
                 <span className={`font-medium ${quality.text}`}>
-                  {qualityData.rating}%
+                  {statsLoading ? "—" : `${qualityData.rating}%`}
                 </span>
               </div>
-              <Progress value={qualityData.rating} className={quality.bg} />
+              <Progress value={statsLoading ? 0 : qualityData.rating} className={quality.bg} />
               <p className="text-sm text-muted-foreground">
-                {getQualityMessage(qualityData.status)}
+                {statsLoading ? "Carregando dados..." : getQualityMessage(qualityData.status)}
               </p>
             </div>
           </CardContent>
@@ -206,23 +289,29 @@ const StatusConexao = () => {
         {/* Card 3 - Capacidade de Envio (Tier) */}
         <Card className="bg-card border-border">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5 text-primary" />
-              Capacidade de Envio (Tier)
+            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+              <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-primary shrink-0" />
+              <span className="truncate">Capacidade de Envio (Tier)</span>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center">
-                  <span className="text-xl font-bold text-primary">
-                    {tierData.current}
-                  </span>
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
+                  {statsLoading ? (
+                    <span className="text-lg sm:text-xl font-bold text-primary">—</span>
+                  ) : tierData.current === "Offline" ? (
+                    <WifiOff className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
+                  ) : (
+                    <span className="text-xs sm:text-sm font-bold text-primary leading-tight text-center px-1">
+                      {tierData.current}
+                    </span>
+                  )}
                 </div>
-                <div>
-                  <p className="font-medium">Tier Atual</p>
-                  <p className="text-sm text-muted-foreground">
-                    {tierData.currentLimit.toLocaleString()} mensagens/dia
+                <div className="min-w-0">
+                  <p className="font-medium text-sm sm:text-base">Tier Atual</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground">
+                    {statsLoading ? "—" : `${tierData.currentLimit.toLocaleString()} mensagens/dia`}
                   </p>
                 </div>
               </div>
@@ -230,11 +319,11 @@ const StatusConexao = () => {
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Progresso para {tierData.nextTier}</span>
-                <span className="font-medium">{tierData.progress}%</span>
+                <span className="font-medium">{statsLoading ? "—" : `${tierData.progress}%`}</span>
               </div>
-              <Progress value={tierData.progress} />
+              <Progress value={statsLoading ? 0 : tierData.progress} />
               <p className="text-sm text-muted-foreground">
-                Próximo tier: {tierData.nextTier} ({tierData.nextTierLimit.toLocaleString()} mensagens/dia)
+                {statsLoading ? "Carregando..." : `Próximo tier: ${tierData.nextTier} (${tierData.nextTierLimit.toLocaleString()} mensagens/dia)`}
               </p>
             </div>
             <div className="text-xs text-muted-foreground bg-muted/30 p-3 rounded-lg">
@@ -247,13 +336,13 @@ const StatusConexao = () => {
       {/* Card 4 - Detalhes da Conta */}
       <Card className="bg-card border-border">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Building2 className="h-5 w-5 text-primary" />
+          <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+            <Building2 className="h-4 w-4 sm:h-5 sm:w-5 text-primary shrink-0" />
             Detalhes da Conta
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             <div className="space-y-1">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Building2 className="h-4 w-4" />

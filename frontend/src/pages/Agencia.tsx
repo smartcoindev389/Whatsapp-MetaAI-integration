@@ -1,6 +1,18 @@
+import { useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Users,
   Building2,
@@ -12,9 +24,61 @@ import {
   Activity,
 } from "lucide-react";
 import { useActiveWaba } from "@/hooks/use-active-waba";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api";
+import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
+
+// Component to fetch and display stats for a single shop
+const ShopStats = ({ wabaId }: { wabaId: string }) => {
+  const { data: dashboard } = useQuery({
+    queryKey: ["dashboard", wabaId],
+    queryFn: () => api.getDashboardStats(wabaId),
+    enabled: !!wabaId,
+  });
+
+  return <>{dashboard?.messages_sent_24h || 0}</>;
+};
 
 const Agencia = () => {
-  const { shops } = useActiveWaba();
+  const { shops, selectShop, refetchShops } = useActiveWaba();
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [newShopName, setNewShopName] = useState("");
+
+  const createShopMutation = useMutation({
+    mutationFn: async (name: string) => {
+      return api.createShop(name);
+    },
+    onSuccess: (newShop) => {
+      toast.success("Empresa criada com sucesso!");
+      setIsCreateDialogOpen(false);
+      setNewShopName("");
+      queryClient.invalidateQueries({ queryKey: ["shops"] });
+      refetchShops();
+      // Optionally select the new shop
+      if (newShop) {
+        selectShop(newShop.id);
+      }
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || "Erro ao criar empresa");
+    },
+  });
+
+  const handleCreateShop = () => {
+    if (!newShopName.trim()) {
+      toast.error("Digite um nome para a empresa");
+      return;
+    }
+    createShopMutation.mutate(newShopName.trim());
+  };
+
+  const handleManageShop = (shopId: string) => {
+    selectShop(shopId);
+    navigate("/");
+  };
 
   const empresas = shops.map((shop) => {
     const waba = shop.waba?.[0];
@@ -22,10 +86,11 @@ const Agencia = () => {
       id: shop.id,
       nome: shop.name,
       status: waba ? "connected" : "pending",
-      wabaId: waba?.wabaId || null,
+      wabaId: waba?.id || null,
       numero: waba?.displayNumber || null,
-      ultimaAtividade: waba ? "Conectado" : "Aguardando conexão",
-      mensagensHoje: 0,
+      ultimaAtividade: waba
+        ? `Conectado${waba.updatedAt ? ` - ${new Date(waba.updatedAt).toLocaleDateString("pt-BR")}` : ""}`
+        : "Aguardando conexão",
     };
   });
 
@@ -52,7 +117,10 @@ const Agencia = () => {
             </p>
           </div>
         </div>
-        <Button className="bg-[#0EA5E9] hover:bg-[#0284C7] shadow-lg shadow-[#0EA5E9]/25">
+        <Button 
+          className="bg-[#0EA5E9] hover:bg-[#0284C7] shadow-lg shadow-[#0EA5E9]/25"
+          onClick={() => setIsCreateDialogOpen(true)}
+        >
           <Plus className="h-4 w-4 mr-2" />
           Adicionar Empresa
         </Button>
@@ -139,10 +207,10 @@ const Agencia = () => {
                       ) : (
                         <span className="text-warning">Sem número conectado</span>
                       )}
-                      {empresa.status === "connected" && (
+                      {empresa.status === "connected" && empresa.wabaId && (
                         <span className="flex items-center gap-1">
                           <Activity className="h-3.5 w-3.5" />
-                          {empresa.mensagensHoje} mensagens hoje
+                          <ShopStats wabaId={empresa.wabaId} /> mensagens hoje
                         </span>
                       )}
                     </div>
@@ -165,6 +233,7 @@ const Agencia = () => {
                     variant="outline" 
                     size="sm" 
                     className="border-[#0EA5E9]/30 text-[#0EA5E9] hover:bg-[#0EA5E9]/10 hover:border-[#0EA5E9]/50"
+                    onClick={() => handleManageShop(empresa.id)}
                   >
                     <ExternalLink className="h-4 w-4 mr-2" />
                     Gerenciar
@@ -193,6 +262,54 @@ const Agencia = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Create Shop Dialog */}
+      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Adicionar Nova Empresa</DialogTitle>
+            <DialogDescription>
+              Crie uma nova empresa para gerenciar suas contas WhatsApp Business.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="shop-name">Nome da Empresa</Label>
+              <Input
+                id="shop-name"
+                placeholder="Ex: Minha Empresa Ltda"
+                value={newShopName}
+                onChange={(e) => setNewShopName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    handleCreateShop();
+                  }
+                }}
+                disabled={createShopMutation.isPending}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsCreateDialogOpen(false);
+                setNewShopName("");
+              }}
+              disabled={createShopMutation.isPending}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleCreateShop}
+              disabled={createShopMutation.isPending || !newShopName.trim()}
+              className="bg-[#0EA5E9] hover:bg-[#0284C7]"
+            >
+              {createShopMutation.isPending ? "Criando..." : "Criar Empresa"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

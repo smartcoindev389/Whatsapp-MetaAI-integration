@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,11 +11,35 @@ import {
   Webhook,
   Settings as SettingsIcon,
 } from "lucide-react";
+import { useActiveWaba } from "@/hooks/use-active-waba";
+import { useNavigate } from "react-router-dom";
 import translations from "@/i18n/pt-BR.json";
 
 const Onboarding = () => {
   const [currentStep, setCurrentStep] = useState(1);
+  const navigate = useNavigate();
+  const { shops, activeShop } = useActiveWaba();
   const t = translations.onboarding;
+
+  // Get all WABA accounts from all shops
+  const connectedAccounts = shops
+    .flatMap((shop) =>
+      (shop.waba || []).map((waba) => ({
+        id: waba.id,
+        name: shop.name,
+        waba_id: waba.wabaId,
+        phone_numbers: [
+          {
+            id: waba.phoneId,
+            number: waba.displayNumber,
+            verified: waba.webhookVerified,
+            status: waba.webhookVerified ? "active" : "pending",
+          },
+        ],
+        status: waba.webhookVerified ? "active" : "pending",
+      }))
+    )
+    .filter((account) => account.waba_id);
 
   const steps = [
     {
@@ -22,14 +47,19 @@ const Onboarding = () => {
       title: t.step1.title,
       description: t.step1.description,
       icon: LinkIcon,
-      status: "completed",
+      status: connectedAccounts.length > 0 ? "completed" : "current",
     },
     {
       id: 2,
       title: t.step2.title,
       description: t.step2.description,
       icon: Phone,
-      status: "current",
+      status:
+        connectedAccounts.length > 0
+          ? connectedAccounts.some((acc) => acc.status === "active")
+            ? "completed"
+            : "current"
+          : "pending",
     },
     {
       id: 3,
@@ -44,19 +74,6 @@ const Onboarding = () => {
       description: t.step4.description,
       icon: SettingsIcon,
       status: "pending",
-    },
-  ];
-
-  const connectedAccounts = [
-    {
-      id: "1",
-      name: "Minha Empresa WABA",
-      waba_id: "123456789012345",
-      phone_numbers: [
-        { id: "p1", number: "+55 11 98765-4321", verified: true, status: "active" },
-        { id: "p2", number: "+55 21 91234-5678", verified: true, status: "active" },
-      ],
-      status: "active",
     },
   ];
 
@@ -140,7 +157,11 @@ const Onboarding = () => {
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
               <span>{t.connectedAccounts}</span>
-              <Button variant="outline" size="sm">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate("/conectar-whatsapp")}
+              >
                 <LinkIcon className="h-4 w-4 mr-2" />
                 {t.connectNew}
               </Button>

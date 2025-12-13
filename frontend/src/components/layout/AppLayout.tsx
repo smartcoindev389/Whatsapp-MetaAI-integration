@@ -4,6 +4,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Bell, LogOut, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
+import headerLogo from "@/assets/header-logo.png";
 
 export const AppLayout = () => {
   const { user, logout } = useAuth();
@@ -25,10 +26,11 @@ export const AppLayout = () => {
             <div className="h-full px-6 flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <SidebarTrigger />
-                <div>
-                  <h2 className="text-lg font-semibold">Plataforma WhatsApp</h2>
-                  <p className="text-xs text-muted-foreground">Mensagens Multiempresa</p>
-                </div>
+                <img 
+                  src={headerLogo} 
+                  alt="Salva Zap" 
+                  className="h-8 w-auto object-contain"
+                />
               </div>
               
               <div className="flex items-center gap-3">
@@ -42,7 +44,7 @@ export const AppLayout = () => {
                   </div>
                   <Button variant="ghost" size="icon" onClick={handleLogout}>
                     <LogOut className="h-5 w-5" />
-                  </Button>
+                </Button>
                 </div>
               </div>
             </div>

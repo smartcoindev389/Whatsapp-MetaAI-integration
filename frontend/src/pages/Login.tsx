@@ -27,10 +27,10 @@ const Login = () => {
 
     try {
       await login(email, password);
-      toast.success("Login successful!");
+      toast.success("Login realizado com sucesso!");
       navigate("/");
     } catch (error: any) {
-      toast.error(error.message || "Login failed");
+      toast.error(error.message || "Falha no login");
     } finally {
       setIsLoading(false);
     }
@@ -51,19 +51,19 @@ const Login = () => {
         {/* Form Section */}
         <Card className="w-full md:w-1/2 max-w-md">
         <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold text-center">Welcome back</CardTitle>
+          <CardTitle className="text-2xl font-bold text-center">Bem-vindo de volta</CardTitle>
           <CardDescription className="text-center">
-            Enter your credentials to access your account
+            Digite suas credenciais para acessar sua conta
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">E-mail</Label>
               <Input
                 id="email"
                 type="email"
-                placeholder="name@example.com"
+                placeholder="nome@exemplo.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -71,7 +71,7 @@ const Login = () => {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">Senha</Label>
               <Input
                 id="password"
                 type="password"
@@ -87,12 +87,12 @@ const Login = () => {
               className="w-full bg-gradient-primary hover:opacity-90"
               disabled={isLoading || loading || isAuthenticated}
             >
-              {isLoading ? "Logging in..." : "Login"}
+              {isLoading ? "Entrando..." : "Entrar"}
             </Button>
             <div className="text-center text-sm text-muted-foreground">
-              Don't have an account?{" "}
+              Não tem uma conta?{" "}
               <Link to="/register" className="text-primary hover:underline">
-                Register
+                Cadastre-se
               </Link>
             </div>
           </form>
